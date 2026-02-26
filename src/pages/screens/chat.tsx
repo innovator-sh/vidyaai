@@ -3,10 +3,17 @@ import { Plus, Database, Moon, ClockCounterClockwise, ChartPie, Waves, Gift, Pap
 import StaggeredMenu from '../../components/StaggeredMenu';
 import { Loader } from '../../components/retroui/Loader';
 import { Select } from '../../components/retroui/Select';
+import dynamic from 'next/dynamic';
+
+const MermaidDiagram = dynamic(() => import('../../components/MermaidDiagram'), {
+  ssr: false,
+});
 
 interface Message {
   role: 'user' | 'ai';
   content: string;
+  hasDiagram?: boolean;
+  diagramCode?: string;
 }
 
 export default function Chat() {
@@ -40,16 +47,127 @@ export default function Chat() {
     e.preventDefault();
     if (input.trim()) {
       setMessages([...messages, { role: 'user', content: input }]);
+      const userInput = input;
       setInput('');
       setIsTyping(true);
+      
       setTimeout(() => {
         setIsTyping(false);
+        
+        // Generate a Mermaid diagram based on the input
+        const diagramCode = generateMermaidDiagram(userInput);
+        
         setMessages(prev => [...prev, {
           role: 'ai',
-          content: 'I understand. Let me help you with that...'
+          content: 'Here\'s a diagram to help visualize this concept:',
+          hasDiagram: true,
+          diagramCode: diagramCode
         }]);
       }, 1500);
     }
+  };
+
+  const generateMermaidDiagram = (input: string): string => {
+    const lowerInput = input.toLowerCase();
+    
+    // Flowchart examples
+    if (lowerInput.includes('process') || lowerInput.includes('flow') || lowerInput.includes('steps')) {
+      return `graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Process 1]
+    B -->|No| D[Process 2]
+    C --> E[End]
+    D --> E`;
+    }
+    
+    // Class diagram
+    if (lowerInput.includes('class') || lowerInput.includes('object') || lowerInput.includes('inheritance')) {
+      return `classDiagram
+    Animal <|-- Dog
+    Animal <|-- Cat
+    Animal : +String name
+    Animal : +int age
+    Animal : +makeSound()
+    Dog : +String breed
+    Dog : +bark()
+    Cat : +String color
+    Cat : +meow()`;
+    }
+    
+    // Sequence diagram
+    if (lowerInput.includes('sequence') || lowerInput.includes('interaction') || lowerInput.includes('communication')) {
+      return `sequenceDiagram
+    participant User
+    participant System
+    participant Database
+    User->>System: Request Data
+    System->>Database: Query
+    Database-->>System: Return Results
+    System-->>User: Display Data`;
+    }
+    
+    // State diagram
+    if (lowerInput.includes('state') || lowerInput.includes('lifecycle')) {
+      return `stateDiagram-v2
+    [*] --> Idle
+    Idle --> Processing: Start
+    Processing --> Success: Complete
+    Processing --> Error: Fail
+    Success --> [*]
+    Error --> Idle: Retry`;
+    }
+    
+    // Pie chart
+    if (lowerInput.includes('pie') || lowerInput.includes('distribution') || lowerInput.includes('percentage')) {
+      return `pie title Study Time Distribution
+    "Mathematics" : 30
+    "Physics" : 25
+    "Chemistry" : 20
+    "Biology" : 15
+    "Computer Science" : 10`;
+    }
+    
+    // Git graph
+    if (lowerInput.includes('git') || lowerInput.includes('branch') || lowerInput.includes('version')) {
+      return `gitGraph
+    commit
+    commit
+    branch develop
+    checkout develop
+    commit
+    commit
+    checkout main
+    merge develop
+    commit`;
+    }
+    
+    // Entity Relationship
+    if (lowerInput.includes('database') || lowerInput.includes('entity') || lowerInput.includes('relationship')) {
+      return `erDiagram
+    STUDENT ||--o{ ENROLLMENT : enrolls
+    STUDENT {
+        string name
+        int id
+        string email
+    }
+    COURSE ||--o{ ENROLLMENT : includes
+    COURSE {
+        string title
+        int code
+        int credits
+    }
+    ENROLLMENT {
+        date enrollDate
+        string grade
+    }`;
+    }
+    
+    // Default flowchart
+    return `graph LR
+    A[Input: ${input.substring(0, 20)}...] --> B[Processing]
+    B --> C[Analysis]
+    C --> D[Result]
+    D --> E[Output]`;
   };
 
   const handleNewChat = () => {
@@ -298,7 +416,14 @@ export default function Chat() {
             {messages.map((msg, idx) => (
               <div key={idx} className={`message-exact ${msg.role}`}>
                 <div className="msg-avatar-exact">{msg.role === 'ai' ? 'V' : 'Y'}</div>
-                <div className="msg-text-exact">{msg.content}</div>
+                <div className="msg-text-exact">
+                  {msg.content}
+                  {msg.hasDiagram && msg.diagramCode && (
+                    <div className="diagram-wrapper">
+                      <MermaidDiagram chart={msg.diagramCode} />
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
             {isTyping && (

@@ -232,9 +232,45 @@
   margin: 0;
 }
 
+@media (max-width: 1024px) {
+  .stats-container {
+    padding: 32px 16px;
+  }
+
+  .stats-header {
+    margin-bottom: 40px;
+  }
+
+  .stats-title {
+    font-size: 40px;
+  }
+
+  .stats-subtitle {
+    font-size: 17px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .chart-card {
+    padding: 24px;
+  }
+
+  .summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+}
+
 @media (max-width: 768px) {
   .stats-container {
-    padding: 20px 10px;
+    padding: 24px 12px;
+  }
+
+  .stats-header {
+    margin-bottom: 32px;
   }
 
   .stats-title {
@@ -245,17 +281,46 @@
     font-size: 16px;
   }
 
+  .subject-selector {
+    margin-top: 20px;
+  }
+
+  .subject-select-trigger {
+    min-width: 240px !important;
+    height: 40px !important;
+    font-size: 14px !important;
+    border: 2px solid #000 !important;
+    box-shadow: 3px 3px 0 #000 !important;
+  }
+
+  .subject-select-trigger:hover {
+    box-shadow: 4px 4px 0 #000 !important;
+  }
+
   .stats-grid {
-    grid-template-columns: 1fr;
     gap: 20px;
   }
 
   .chart-card {
     padding: 20px;
+    border: 2px solid #000;
+    box-shadow: 4px 4px 0 #000;
+  }
+
+  .chart-card:hover {
+    box-shadow: 5px 5px 0 #000;
+  }
+
+  .chart-header {
+    margin-bottom: 20px;
   }
 
   .chart-title {
     font-size: 20px;
+  }
+
+  .chart-description {
+    font-size: 13px;
   }
 
   .summary-cards {
@@ -263,7 +328,141 @@
     gap: 16px;
   }
 
+  .summary-card {
+    padding: 20px;
+    gap: 16px;
+    border: 2px solid #000;
+    box-shadow: 3px 3px 0 #000;
+  }
+
+  .summary-card:hover {
+    box-shadow: 4px 4px 0 #000;
+  }
+
+  .summary-icon {
+    font-size: 40px;
+  }
+
+  .summary-value {
+    font-size: 28px;
+  }
+
+  .summary-label {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 640px) {
+  .stats-container {
+    padding: 20px 12px;
+  }
+
+  .stats-header {
+    margin-bottom: 28px;
+  }
+
+  .stats-title {
+    font-size: 28px;
+  }
+
+  .stats-subtitle {
+    font-size: 15px;
+  }
+
+  .subject-select-trigger {
+    min-width: 200px !important;
+    height: 38px !important;
+    font-size: 13px !important;
+  }
+
+  .chart-card {
+    padding: 16px;
+  }
+
+  .chart-title {
+    font-size: 18px;
+  }
+
+  .chart-description {
+    font-size: 12px;
+  }
+
+  .summary-card {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .summary-icon {
+    font-size: 36px;
+  }
+
   .summary-value {
     font-size: 24px;
+  }
+
+  .summary-label {
+    font-size: 12px;
+  }
+
+  /* Make charts more readable on small screens */
+  .chart-card .recharts-cartesian-axis-tick-value {
+    font-size: 10px !important;
+  }
+
+  .chart-card .recharts-tooltip-label {
+    font-size: 12px !important;
+  }
+
+  .chart-card .recharts-tooltip-item {
+    font-size: 11px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-container {
+    padding: 16px 10px;
+  }
+
+  .stats-title {
+    font-size: 24px;
+  }
+
+  .stats-subtitle {
+    font-size: 14px;
+  }
+
+  .subject-select-trigger {
+    min-width: 180px !important;
+    height: 36px !important;
+    font-size: 12px !important;
+  }
+
+  .chart-card {
+    padding: 14px;
+  }
+
+  .chart-title {
+    font-size: 16px;
+  }
+
+  .chart-description {
+    font-size: 11px;
+  }
+
+  .summary-card {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .summary-icon {
+    font-size: 32px;
+  }
+
+  .summary-value {
+    font-size: 22px;
+  }
+
+  .summary-label {
+    font-size: 11px;
   }
 }
