@@ -1,0 +1,7 @@
+<svg width="110" height="32" viewBox="0 0 110 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <text x="0" y="24" font-family="Arial, sans-serif" font-size="24" font-weight="800" fill="#5f4fe6">
+    Vidya<tspan fill="#212121">AI</tspan>
+  </text>
+  <circle cx="4" cy="4" r="3" fill="#5f4fe6" opacity="0.6"/>
+  <circle cx="106" cy="4" r="3" fill="#5f4fe6" opacity="0.6"/>
+</svg>
