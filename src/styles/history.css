@@ -200,7 +200,7 @@
 /* History Grid */
 .history-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
 
@@ -379,6 +379,12 @@
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+  .history-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .history-container {
     padding: 80px 16px 32px;
@@ -470,6 +476,11 @@
   .history-tab {
     padding: 8px 14px;
     font-size: 12px;
+  }
+
+  .history-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .history-card {

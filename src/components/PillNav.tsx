@@ -20,7 +20,7 @@ export default function PillNav() {
     { label: 'Home', path: '/', icon: <House size={20} weight="bold" /> },
     { label: 'Chat', path: '/screens/chat', icon: <ChatCircle size={20} weight="bold" /> },
     { label: 'Stats', path: '/screens/stats', icon: <ChartBar size={20} weight="bold" /> },
-    { label: 'Account', path: '/auth', icon: <User size={20} weight="bold" /> },
+    { label: 'Account', path: '/screens/account', icon: <User size={20} weight="bold" /> },
   ];
 
   // Initial entrance animation

@@ -241,14 +241,14 @@ export default function Chat() {
             {!sidebarCollapsed && <span className="sidebar-label">Night Mode</span>}
           </button>
           
-          <button 
+          <a 
+            href="/screens/history"
             className="sidebar-btn" 
-            onClick={() => setShowHistory(!showHistory)}
             title="History"
           >
             <ClockCounterClockwise size={24} />
             {!sidebarCollapsed && <span className="sidebar-label">History</span>}
-          </button>
+          </a>
         </div>
       </div>
 

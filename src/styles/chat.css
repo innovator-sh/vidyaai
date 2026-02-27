@@ -145,7 +145,7 @@
   font-style: italic;
   color: #1a1a1a;
   line-height: 1.2;
-  margin: 120px 0 15px 0px;
+  margin: 130px 0 12px 0;
 }
 
 .greeting-subtitle {
@@ -153,7 +153,7 @@
   font-size: 16px;
   font-weight: 400;
   color: #666;
-  margin: 50px 0 15px 0;
+  margin: 0 0 32px 0;
 }
 
 /* Search Container */
@@ -1433,6 +1433,7 @@
 
   .greeting-exact {
     font-size: 28px;
+    margin-top: 120px;
   }
 
   .greeting-subtitle {

@@ -2312,3 +2312,352 @@ body {
     }
   }
 }
+
+
+/* Dark Mode Styles */
+.dark-mode {
+  /* Background colors */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2a2a2a;
+  
+  /* Text colors */
+  --text-primary: #ffffff;
+  --text-secondary: #e0e0e0;
+  --text-muted: #a0a0a0;
+  
+  /* Border colors */
+  --border-primary: #3a3a3a;
+  --border-secondary: #2a2a2a;
+  
+  /* Accent colors remain bright for contrast */
+  --accent-yellow: #FFE500;
+  --accent-lime: #c8ff00;
+  --accent-blue: #5b7cff;
+}
+
+/* Global dark mode overrides */
+.dark-mode body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Home page dark mode */
+.dark-mode .home-container {
+  background-color: var(--bg-primary);
+}
+
+.dark-mode .home-hero {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .home-hero-title,
+.dark-mode .home-hero-subtitle,
+.dark-mode .home-stat-value,
+.dark-mode .home-stat-label {
+  color: var(--text-primary);
+}
+
+.dark-mode .home-stat-card {
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .home-feature-card {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .home-feature-title,
+.dark-mode .home-feature-description {
+  color: var(--text-primary);
+}
+
+.dark-mode .home-cta-button {
+  background-color: var(--accent-yellow);
+  color: #0a0a0a;
+  border-color: var(--border-primary);
+}
+
+/* Chat screen dark mode */
+.dark-mode .chat-container {
+  background-color: var(--bg-primary);
+}
+
+.dark-mode .chat-sidebar {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .chat-sidebar-header,
+.dark-mode .chat-history-item {
+  color: var(--text-primary);
+  border-color: var(--border-secondary);
+}
+
+.dark-mode .chat-history-item:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.dark-mode .chat-main {
+  background-color: var(--bg-primary);
+}
+
+.dark-mode .chat-welcome-greeting,
+.dark-mode .chat-welcome-subtitle {
+  color: var(--text-primary);
+}
+
+.dark-mode .chat-search-bar,
+.dark-mode .chat-quick-card,
+.dark-mode .chat-topic-chip {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+  color: var(--text-primary);
+}
+
+.dark-mode .chat-search-bar::placeholder {
+  color: var(--text-muted);
+}
+
+.dark-mode .chat-quick-card:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.dark-mode .chat-bubble.user {
+  background-color: var(--accent-yellow);
+  color: #0a0a0a;
+  border-color: var(--border-primary);
+}
+
+.dark-mode .chat-bubble.ai {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .chat-input-area {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .chat-textarea {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .chat-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+/* Stats page dark mode */
+.dark-mode .stats-container {
+  background-color: var(--bg-primary);
+}
+
+.dark-mode .stats-header-title {
+  color: var(--text-primary);
+}
+
+.dark-mode .stats-chart-card,
+.dark-mode .stats-summary-card {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .stats-chart-title,
+.dark-mode .stats-summary-value,
+.dark-mode .stats-summary-label {
+  color: var(--text-primary);
+}
+
+/* History page dark mode */
+.dark-mode .history-container {
+  background-color: var(--bg-primary);
+}
+
+.dark-mode .history-header-title {
+  color: var(--text-primary);
+}
+
+.dark-mode .history-search-bar,
+.dark-mode .history-card {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+  color: var(--text-primary);
+}
+
+.dark-mode .history-search-bar::placeholder {
+  color: var(--text-muted);
+}
+
+.dark-mode .history-filter-tab {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .history-filter-tab.active {
+  background-color: var(--accent-yellow);
+  color: #0a0a0a;
+}
+
+.dark-mode .history-card-title,
+.dark-mode .history-card-preview {
+  color: var(--text-primary);
+}
+
+.dark-mode .history-card-timestamp {
+  color: var(--text-muted);
+}
+
+/* Account page dark mode */
+.dark-mode .account-container {
+  background-color: var(--bg-primary);
+}
+
+.dark-mode .account-page-title,
+.dark-mode .account-section-title,
+.dark-mode .account-profile-name {
+  color: var(--text-primary);
+}
+
+.dark-mode .account-profile-card,
+.dark-mode .account-stat-card,
+.dark-mode .account-subscription-card,
+.dark-mode .account-settings-card {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .account-profile-bio,
+.dark-mode .account-stat-label,
+.dark-mode .account-subscription-text,
+.dark-mode .account-setting-label {
+  color: var(--text-secondary);
+}
+
+.dark-mode .account-btn.primary {
+  background-color: var(--accent-yellow);
+  color: #0a0a0a;
+  border-color: var(--border-primary);
+}
+
+.dark-mode .account-btn.secondary {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+
+/* Auth pages dark mode */
+.dark-mode .auth-container {
+  background-color: var(--bg-primary);
+}
+
+.dark-mode .auth-form-section {
+  background-color: var(--bg-secondary);
+}
+
+.dark-mode .auth-title,
+.dark-mode .auth-subtitle {
+  color: var(--text-primary);
+}
+
+.dark-mode .auth-input {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .auth-input::placeholder {
+  color: var(--text-muted);
+}
+
+.dark-mode .auth-button.primary {
+  background-color: var(--accent-yellow);
+  color: #0a0a0a;
+  border-color: var(--border-primary);
+}
+
+.dark-mode .auth-button.social {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+
+/* Pill Nav dark mode */
+.dark-mode .pill-nav {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .pill-nav-item {
+  color: var(--text-primary);
+}
+
+.dark-mode .pill-nav-item.active {
+  background-color: var(--accent-yellow);
+  color: #0a0a0a;
+}
+
+.dark-mode .pill-nav-indicator {
+  background-color: var(--accent-yellow);
+}
+
+/* Staggered Menu dark mode */
+.dark-mode .staggered-menu {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .menu-item {
+  color: var(--text-primary);
+  border-color: var(--border-secondary);
+}
+
+.dark-mode .menu-item:hover {
+  background-color: var(--bg-tertiary);
+}
+
+/* Retroui components dark mode */
+.dark-mode .retro-select,
+.dark-mode .retro-input {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .retro-select-menu {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+.dark-mode .retro-select-option {
+  color: var(--text-primary);
+}
+
+.dark-mode .retro-select-option:hover {
+  background-color: var(--bg-tertiary);
+}
+
+/* Mermaid diagrams dark mode */
+.dark-mode .mermaid-container {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+/* Scrollbar dark mode */
+.dark-mode ::-webkit-scrollbar {
+  background-color: var(--bg-secondary);
+}
+
+.dark-mode ::-webkit-scrollbar-thumb {
+  background-color: var(--border-primary);
+  border-color: var(--bg-secondary);
+}
+
+.dark-mode ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted);
+}
