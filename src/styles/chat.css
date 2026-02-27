@@ -16,70 +16,63 @@
 .sidebar-exact {
   width: 260px;
   background: #e8e6d8;
-  border-right: 3px solid #000;
+  border-right: 1px solid #d0cdb8;
   display: flex;
   flex-direction: column;
-  padding: 12px 0;
-  gap: 4px;
+  padding: 0;
+  gap: 0;
   position: fixed;
   left: 0;
   top: 0;
   height: 100vh;
   z-index: 1000;
   transition: transform 0.3s ease;
-  box-shadow: 4px 0 0 #000;
+  box-shadow: none;
 }
 
 .sidebar-exact.collapsed {
-  transform: translateX(-260px);
+  width: 60px;
 }
 
-/* External Sidebar Toggle - Always Visible */
-.sidebar-toggle-external {
-  position: fixed;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 48px;
-  height: 80px;
+/* Collapse Toggle at Top of Sidebar */
+.sidebar-collapse-toggle {
+  width: 100%;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #e8e6d8;
-  border: 3px solid #000;
-  border-left: none;
-  border-radius: 0 12px 12px 0;
+  background: #d8d6c8;
+  border: none;
+  border-bottom: 3px solid #000;
   cursor: pointer;
   color: #1a1a1a;
-  transition: all 0.3s ease;
-  box-shadow: 4px 4px 0 #000;
-  z-index: 999;
-  font-weight: 700;
+  transition: all 0.2s;
+  flex-shrink: 0;
 }
 
-.sidebar-toggle-external:hover {
-  background: #d8d6c8;
-  transform: translateY(-50%) translateX(4px);
-  box-shadow: 6px 6px 0 #000;
+.sidebar-collapse-toggle:hover {
+  background: #c8c6b8;
 }
 
-.sidebar-exact:not(.collapsed) ~ .sidebar-toggle-external {
-  left: 260px;
+.sidebar-exact.collapsed .sidebar-collapse-toggle {
+  justify-content: center;
 }
 
 .sidebar-btn {
   width: 100%;
-  min-height: 48px;
+  min-height: 56px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 12px;
-  padding: 0 12px;
+  padding: 0 16px;
   background: transparent;
   border: none;
+  border-bottom: 1px solid #d0cdb8;
   cursor: pointer;
   color: #666;
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 
 .sidebar-exact.collapsed .sidebar-btn {
@@ -127,18 +120,21 @@
 /* Main */
 .main-exact {
   flex: 1;
-  margin-left: 0;
-  width: 100%;
+  margin-left: 260px;
+  width: calc(100% - 260px);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 20px;
   position: relative;
-  transition: none;
+  transition: margin-left 0.3s ease, width 0.3s ease;
 }
 
-/* Remove sidebar margin adjustments */
+.sidebar-exact.collapsed ~ .main-exact {
+  margin-left: 60px;
+  width: calc(100% - 60px);
+}
 
 .menu-exact {
   position: absolute;
@@ -1114,6 +1110,11 @@
 .sidebar-section {
   padding: 16px 12px;
   border-bottom: 1px solid #d0cdb8;
+  flex-shrink: 0;
+}
+
+.sidebar-exact.collapsed .sidebar-section {
+  display: none;
 }
 
 .sidebar-section-title {
@@ -1174,8 +1175,8 @@
 
 .sidebar-bottom {
   margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid #d0cdb8;
+  padding-top: 0;
+  border-top: none;
 }
 
 .chat-exact.night-mode .greeting-exact {
@@ -1238,20 +1239,26 @@
 @media (max-width: 768px) {
   .sidebar-exact {
     width: 260px;
+    transform: translateX(-260px);
+  }
+
+  .sidebar-exact:not(.collapsed) {
+    transform: translateX(0);
   }
 
   .sidebar-exact.collapsed {
     transform: translateX(-260px);
   }
 
-  .sidebar-toggle {
-    right: -40px;
-  }
-
   .main-exact {
     margin-left: 0;
     width: 100%;
     padding: 12px;
+  }
+
+  .sidebar-exact.collapsed ~ .main-exact {
+    margin-left: 0;
+    width: 100%;
   }
 
   .greeting-exact {

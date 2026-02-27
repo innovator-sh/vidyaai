@@ -223,15 +223,6 @@ export default function Chat() {
     <div className={`chat-exact ${nightMode ? 'night-mode' : ''}`}>
       <PillNav />
 
-      {/* Sidebar Toggle Button - Always Visible */}
-      <button 
-        className="sidebar-toggle-external"
-        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        title={sidebarCollapsed ? 'Open Sidebar' : 'Close Sidebar'}
-      >
-        {sidebarCollapsed ? <CaretRight size={20} weight="bold" /> : <CaretLeft size={20} weight="bold" />}
-      </button>
-
       {/* Sidebar Overlay */}
       <div 
         className={`sidebar-overlay ${!sidebarCollapsed ? 'active' : ''}`}
@@ -240,6 +231,15 @@ export default function Chat() {
 
       {/* Left Sidebar */}
       <div className={`sidebar-exact ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        
+        {/* Collapse Toggle at Top */}
+        <button 
+          className="sidebar-collapse-toggle"
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+        >
+          {sidebarCollapsed ? <CaretRight size={20} weight="bold" /> : <CaretLeft size={20} weight="bold" />}
+        </button>
 
         <button className="sidebar-btn" onClick={handleNewChat} title="New Chat">
           <Plus size={24} weight="bold" />
