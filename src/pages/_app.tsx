@@ -4,6 +4,8 @@ import "@/styles/index.css";
 import "@/styles/chat.css";
 import "@/styles/stats.css";
 import "@/styles/auth.css";
+import "@/styles/pillnav.css";
+import "@/styles/history.css";
 import type { AppProps } from "next/app";
 
 export default function App({ Component, pageProps }: AppProps) {

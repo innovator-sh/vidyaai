@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Plus, Database, Moon, ClockCounterClockwise, ChartPie, Waves, Gift, Paperclip, ArrowRight, FileText, Lightbulb, PencilSimple, Exam, CaretRight, CaretLeft, DotsThree, ChatCircleDots, Star } from 'phosphor-react';
-import StaggeredMenu from '../../components/StaggeredMenu';
+import PillNav from '../../components/PillNav';
 import { Loader } from '../../components/retroui/Loader';
 import { Select } from '../../components/retroui/Select';
 import dynamic from 'next/dynamic';
@@ -18,17 +18,11 @@ interface Message {
 
 export default function Chat() {
 
-  const menuItems = [
-    { label: 'Home', ariaLabel: 'Go to home page', link: '/' },
-    { label: 'Chat', ariaLabel: 'Chat with AI', link: '/screens/chat' },
-    { label: 'Stats', ariaLabel: 'Statistics for Progress', link: '/screens/stats' },
-    { label: 'Account', ariaLabel: 'Account Settings', link: '/account' }
-  ];
-
-  const socialItems = [
-    { label: 'Twitter', link: 'https://twitter.com' },
-    { label: 'GitHub', link: 'https://github.com' },
-    { label: 'LinkedIn', link: 'https://linkedin.com' }
+  const navItems = [
+    { label: 'Home', link: '/' },
+    { label: 'Chat', link: '/screens/chat' },
+    { label: 'Stats', link: '/screens/stats' },
+    { label: 'Memory', link: '/screens/memory' },
   ];
 
 
@@ -177,21 +171,7 @@ export default function Chat() {
 
   return (
     <div className={`chat-exact ${nightMode ? 'night-mode' : ''}`}>
-      <StaggeredMenu
-        position="right"
-        items={menuItems}
-        socialItems={socialItems}
-        displaySocials
-        displayItemNumbering={true}
-        menuButtonColor="#2a2a2a"
-        openMenuButtonColor="#2a2a2a"
-        changeMenuColorOnOpen={false}
-        colors={['#FF3D9A', '#0066FF']}
-        accentColor="#0066FF"
-        onMenuOpen={() => console.log('Menu opened')}
-        onMenuClose={() => console.log('Menu closed')}
-        isFixed={true}
-      />
+      <PillNav />
 
       {/* Left Sidebar */}
       <div className={`sidebar-exact ${sidebarCollapsed ? 'collapsed' : ''}`}>
@@ -278,9 +258,7 @@ export default function Chat() {
         {/* Center Content */}
         {messages.length === 0 ? (
           <div className="center-exact">
-            <div className="welcome-icon">
-              <img src="/vidyaa-logo.svg" alt="Vidya AI" className="logo-icon" />
-            </div>
+            
             <h1 className="greeting-exact">
               Hello! Ready to study?
             </h1>
@@ -316,22 +294,34 @@ export default function Chat() {
                   <div className="mode-selector-wrapper">
                     <Select value={selectedMode} onValueChange={setSelectedMode}>
                       <Select.Trigger className="mode-selector-trigger">
-                        <DotsThree size={20} weight="bold" />
+                        <div className="mode-selector-display">
+                          <img 
+                            src={`/${selectedMode}.svg`} 
+                            alt={selectedMode} 
+                            className="mode-selector-icon" 
+                          />
+                          <span className="mode-selector-text">
+                            {selectedMode === 'study-buddy' ? 'Study Buddy' : 
+                             selectedMode === 'teacher' ? 'Teacher' : 'Mentor'}
+                          </span>
+                        </div>
                       </Select.Trigger>
-                      <Select.Content>
-                        <Select.Item value="study-buddy">
+                      <Select.Content className="mode-selector-content">
+                        <Select.Item value="study-buddy" className="mode-selector-item">
                           <div className="mode-option">
                             <img src="/study-buddy.svg" alt="" className="mode-option-icon" />
                             <span>Study Buddy</span>
                           </div>
                         </Select.Item>
-                        <Select.Item value="teacher">
+                        <Select.Separator className="mode-separator" />
+                        <Select.Item value="teacher" className="mode-selector-item">
                           <div className="mode-option">
                             <img src="/teacher.svg" alt="" className="mode-option-icon" />
                             <span>Teacher</span>
                           </div>
                         </Select.Item>
-                        <Select.Item value="mentor">
+                        <Select.Separator className="mode-separator" />
+                        <Select.Item value="mentor" className="mode-selector-item">
                           <div className="mode-option">
                             <img src="/mentor.svg" alt="" className="mode-option-icon" />
                             <span>Mentor</span>
@@ -473,22 +463,34 @@ export default function Chat() {
                 <div className="floating-mode-selector">
                   <Select value={selectedMode} onValueChange={setSelectedMode}>
                     <Select.Trigger className="floating-mode-trigger">
-                      <DotsThree size={20} weight="bold" />
+                      <div className="mode-selector-display">
+                        <img 
+                          src={`/${selectedMode}.svg`} 
+                          alt={selectedMode} 
+                          className="mode-selector-icon" 
+                        />
+                        <span className="mode-selector-text">
+                          {selectedMode === 'study-buddy' ? 'Study Buddy' : 
+                           selectedMode === 'teacher' ? 'Teacher' : 'Mentor'}
+                        </span>
+                      </div>
                     </Select.Trigger>
-                    <Select.Content>
-                      <Select.Item value="study-buddy">
+                    <Select.Content className="mode-selector-content">
+                      <Select.Item value="study-buddy" className="mode-selector-item">
                         <div className="mode-option">
                           <img src="/study-buddy.svg" alt="" className="mode-option-icon" />
                           <span>Study Buddy</span>
                         </div>
                       </Select.Item>
-                      <Select.Item value="teacher">
+                      <Select.Separator className="mode-separator" />
+                      <Select.Item value="teacher" className="mode-selector-item">
                         <div className="mode-option">
                           <img src="/teacher.svg" alt="" className="mode-option-icon" />
                           <span>Teacher</span>
                         </div>
                       </Select.Item>
-                      <Select.Item value="mentor">
+                      <Select.Separator className="mode-separator" />
+                      <Select.Item value="mentor" className="mode-selector-item">
                         <div className="mode-option">
                           <img src="/mentor.svg" alt="" className="mode-option-icon" />
                           <span>Mentor</span>
@@ -596,7 +598,7 @@ export default function Chat() {
         </div> */}
 
         {/* History Popup */}
-        {showHistory && (
+        {/* {showHistory && (
           <div className="popup-exact history-popup">
             <div className="popup-header">Recent Chats</div>
             <div className="history-list-exact">
@@ -615,7 +617,7 @@ export default function Chat() {
 
             </div>
           </div>
-        )}
+        )} */}
         </div>
       </div>
 

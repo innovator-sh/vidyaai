@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,600&display=swap');
 
 /* Split Layout Container */
 .auth-split-container {
@@ -43,7 +44,7 @@
 }
 
 .auth-title {
-  font-family: 'Sora', sans-serif;
+  font-family: 'Noto Serif', serif;
   font-size: 32px;
   font-weight: 700;
   color: #000;
@@ -265,7 +266,7 @@
 }
 
 .auth-welcome-title {
-  font-family: 'Sora', sans-serif;
+  font-family: 'Noto Serif', serif;
   font-size: 56px;
   font-weight: 700;
   color: #000;

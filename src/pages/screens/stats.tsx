@@ -3,24 +3,11 @@ import { ChartBar, Timer, CheckCircle, Target } from 'phosphor-react';
 import { BarChart } from '../../components/retroui/charts/BarChart';
 import { PieChart } from '../../components/retroui/charts/PieChart';
 import { LineChart } from '../../components/retroui/charts/LineChart';
-import StaggeredMenu from '../../components/StaggeredMenu';
+import PillNav from '../../components/PillNav';
 import { Select } from '../../components/retroui/Select';
 
 export default function Stats() {
   const [selectedSubject, setSelectedSubject] = useState('engineering-math');
-
-  const menuItems = [
-    { label: 'Home', ariaLabel: 'Go to home page', link: '/' },
-    { label: 'Chat', ariaLabel: 'Chat with AI', link: '/screens/chat' },
-    { label: 'Stats', ariaLabel: 'Statistics for Progress', link: '/stats' },
-    { label: 'Account', ariaLabel: 'Account Settings', link: '/account' }
-  ];
-
-  const socialItems = [
-    { label: 'Twitter', link: 'https://twitter.com' },
-    { label: 'GitHub', link: 'https://github.com' },
-    { label: 'LinkedIn', link: 'https://linkedin.com' }
-  ];
 
   // Topic-wise performance data
   const topicPerformance = [
@@ -54,22 +41,7 @@ export default function Stats() {
 
   return (
     <div className="stats-container">
-      <StaggeredMenu
-        position="right"
-        items={menuItems}
-        socialItems={socialItems}
-        displaySocials
-        displayItemNumbering={true}
-        menuButtonColor="#2a2a2a"
-        openMenuButtonColor="#2a2a2a"
-        changeMenuColorOnOpen={false}
-        colors={['#FF3D9A', '#0066FF']}
-        logoUrl="/vidyaa-logo.svg"
-        accentColor="#0066FF"
-        onMenuOpen={() => console.log('Menu opened')}
-        onMenuClose={() => console.log('Menu closed')}
-        isFixed={true}
-      />
+      <PillNav />
 
       <div className="stats-content">
         <div className="stats-header">
@@ -81,23 +53,28 @@ export default function Stats() {
               <Select.Trigger className="subject-select-trigger">
                 <Select.Value />
               </Select.Trigger>
-              <Select.Content>
-                <Select.Item value="engineering-math">
+              <Select.Content className="subject-select-content">
+                <Select.Item value="engineering-math" className="subject-select-item">
                   <span>Engineering Mathematics</span>
                 </Select.Item>
-                <Select.Item value="physics">
+                <Select.Separator className="subject-separator" />
+                <Select.Item value="physics" className="subject-select-item">
                   <span>Physics</span>
                 </Select.Item>
-                <Select.Item value="chemistry">
+                <Select.Separator className="subject-separator" />
+                <Select.Item value="chemistry" className="subject-select-item">
                   <span>Chemistry</span>
                 </Select.Item>
-                <Select.Item value="computer-science">
+                <Select.Separator className="subject-separator" />
+                <Select.Item value="computer-science" className="subject-select-item">
                   <span>Computer Science</span>
                 </Select.Item>
-                <Select.Item value="electronics">
+                <Select.Separator className="subject-separator" />
+                <Select.Item value="electronics" className="subject-select-item">
                   <span>Electronics</span>
                 </Select.Item>
-                <Select.Item value="mechanics">
+                <Select.Separator className="subject-separator" />
+                <Select.Item value="mechanics" className="subject-select-item">
                   <span>Mechanics</span>
                 </Select.Item>
               </Select.Content>
