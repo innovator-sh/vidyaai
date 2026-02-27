@@ -1,0 +1,31 @@
+# Virtual environments
+myvenv/
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+
+# Large data/cache
+hf_cache/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+
+# Broken environment
+myvenv_broken/
+
+# Data files
+*.pdf
+
+firebase-service-account.json

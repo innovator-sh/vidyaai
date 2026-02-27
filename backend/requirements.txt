@@ -1,0 +1,17 @@
+langchain
+langchain_community
+langchain_core
+langchain_groq
+langchain-huggingface
+langchain-text-splitters
+langgraph
+sentence-transformers
+faiss-cpu
+chromadb
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic
+pypdf
+langchain_openai
+firebase-admin

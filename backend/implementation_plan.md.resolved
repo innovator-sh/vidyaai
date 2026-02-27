@@ -1,0 +1,119 @@
+# Frontend-Backend Integration Plan
+
+This plan outlines how a JavaScript/TypeScript frontend can communicate with the existing FastAPI backend to start a RAG session and send follow-up queries.
+
+## Overview
+
+The backend currently exposes endpoints under `/rag/session/`. The most critical interaction is starting a session with a document and a query.
+
+### 1. Starting a Session (`/rag/session/start`)
+
+The current API expects a JSON payload with the document content already extracted as a string.
+
+#### API Contract
+- **Method**: `POST`
+- **URL**: `${BASE_URL}/rag/session/start`
+- **Headers**: `Content-Type: application/json`
+- **Payload**:
+  ```json
+  {
+    "student_id": "ST123",
+    "session_id": "SESS456",
+    "document_text": "Full text of the document...",
+    "query_text": "The student's question..."
+  }
+  ```
+
+#### Frontend Implementation Steps (JS)
+1. **File Selection**: Use an `<input type="file">` to let the user select a file.
+2. **Text Extraction**: Since the backend expects `document_text`, the frontend must extract text from the file (e.g., using `fileReader` for [.txt](file:///Users/dhruv/Desktop/morpheus/vidyaai_rag/requirements.txt) or a library like `pdf.js` for PDFs).
+3. **API Call**: Use the `fetch` API.
+
+```javascript
+async function startSession(studentId, sessionId, docText, queryText) {
+  const response = await fetch('http://localhost:8000/rag/session/start', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      student_id: studentId,
+      session_id: sessionId,
+      document_text: docText,
+      query_text: queryText,
+    }),
+  });
+  return await response.json();
+}
+```
+
+---
+
+### 2. Follow-up Queries (`/rag/session/followup`)
+
+For subsequent questions in the same session, use the followup endpoint.
+
+#### API Contract
+- **Method**: `POST`
+- **URL**: `${BASE_URL}/rag/session/followup`
+- **Payload**:
+  ```json
+  {
+    "student_id": "ST123",
+    "session_id": "SESS456",
+    "query_text": "But why does that happen?"
+  }
+  ```
+
+#### Frontend Implementation Steps (JS)
+```javascript
+async function sendFollowUp(studentId, sessionId, queryText) {
+  const response = await fetch('http://localhost:8000/rag/session/followup', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      student_id: studentId,
+      session_id: sessionId,
+      query_text: queryText,
+    }),
+  });
+  return await response.json();
+}
+```
+
+---
+
+### 3. Recommended Improvement: File Upload via `FormData`
+
+If the frontend developer prefers sending the **actual file** (PDF/DOCX) instead of extracting text client-side, the backend should be updated to use `UploadFile` and `multipart/form-data`.
+
+**If you go this route, the frontend call would look like this:**
+
+```javascript
+async function uploadFileAndStart(studentId, sessionId, file, queryText) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('student_id', studentId);
+  formData.append('session_id', sessionId);
+  formData.append('query_text', queryText);
+
+  const response = await fetch('http://localhost:8000/rag/session/start', {
+    method: 'POST',
+    // browser automatically sets Content-Type to multipart/form-data with boundary
+    body: formData,
+  });
+  return await response.json();
+}
+```
+
+> [!NOTE]
+> The current backend code (at the time of writing) expects `document_text` as a string. To use the `FormData` approach, the backend [session_start](file:///Users/dhruv/Desktop/morpheus/vidyaai_rag/api/routes/rag_session.py#22-53) function would need to be modified to accept `File` objects.
+
+## Summary Checklist for Frontend
+- [ ] Implement file picker and (optional) text extraction.
+- [ ] Generate unique `session_id` (e.g., using `crypto.randomUUID()`).
+- [ ] Call `/start` to get the initial analysis and solution.
+- [ ] call `/followup` for subsequent chat messages.
+- [ ] Call `/end` when the user finishes the session to save summary to long-term memory.
