@@ -31,34 +31,84 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [nightMode, setNightMode] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [selectedMode, setSelectedMode] = useState('study-buddy');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (input.trim()) {
-      setMessages([...messages, { role: 'user', content: input }]);
       const userInput = input;
+      setMessages([...messages, { role: 'user', content: userInput }]);
       setInput('');
       setIsTyping(true);
       
-      setTimeout(() => {
+      try {
+        // Call the chat API endpoint
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: userInput,
+            mode: selectedMode,
+            conversationHistory: messages,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to get response');
+        }
+
+        const data = await response.json();
+        
         setIsTyping(false);
         
-        // Generate a Mermaid diagram based on the input
-        const diagramCode = generateMermaidDiagram(userInput);
+        // Check if response should include a diagram
+        const shouldHaveDiagram = checkForDiagramKeywords(userInput);
         
+        if (shouldHaveDiagram) {
+          const diagramCode = generateMermaidDiagram(userInput);
+          setMessages(prev => [...prev, {
+            role: 'ai',
+            content: data.response || 'Here\'s a diagram to help visualize this concept:',
+            hasDiagram: true,
+            diagramCode: diagramCode
+          }]);
+        } else {
+          setMessages(prev => [...prev, {
+            role: 'ai',
+            content: data.response || 'I understand your question. Let me help you with that.',
+          }]);
+        }
+      } catch (error) {
+        console.error('Error calling chat API:', error);
+        setIsTyping(false);
+        
+        // Fallback to local response
+        const diagramCode = generateMermaidDiagram(userInput);
         setMessages(prev => [...prev, {
           role: 'ai',
           content: 'Here\'s a diagram to help visualize this concept:',
           hasDiagram: true,
           diagramCode: diagramCode
         }]);
-      }, 1500);
+      }
     }
+  };
+
+  const checkForDiagramKeywords = (input: string): boolean => {
+    const lowerInput = input.toLowerCase();
+    const diagramKeywords = [
+      'diagram', 'flowchart', 'process', 'flow', 'steps',
+      'class', 'object', 'inheritance', 'sequence', 'interaction',
+      'state', 'lifecycle', 'pie', 'distribution', 'percentage',
+      'git', 'branch', 'database', 'entity', 'relationship', 'visualize'
+    ];
+    return diagramKeywords.some(keyword => lowerInput.includes(keyword));
   };
 
   const generateMermaidDiagram = (input: string): string => {
@@ -173,14 +223,23 @@ export default function Chat() {
     <div className={`chat-exact ${nightMode ? 'night-mode' : ''}`}>
       <PillNav />
 
+      {/* Sidebar Toggle Button - Always Visible */}
+      <button 
+        className="sidebar-toggle-external"
+        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+        title={sidebarCollapsed ? 'Open Sidebar' : 'Close Sidebar'}
+      >
+        {sidebarCollapsed ? <CaretRight size={20} weight="bold" /> : <CaretLeft size={20} weight="bold" />}
+      </button>
+
+      {/* Sidebar Overlay */}
+      <div 
+        className={`sidebar-overlay ${!sidebarCollapsed ? 'active' : ''}`}
+        onClick={() => setSidebarCollapsed(true)}
+      />
+
       {/* Left Sidebar */}
       <div className={`sidebar-exact ${sidebarCollapsed ? 'collapsed' : ''}`}>
-        <button 
-          className="sidebar-toggle"
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        >
-          {sidebarCollapsed ? <CaretRight size={20} weight="bold" /> : <CaretLeft size={20} weight="bold" />}
-        </button>
 
         <button className="sidebar-btn" onClick={handleNewChat} title="New Chat">
           <Plus size={24} weight="bold" />
