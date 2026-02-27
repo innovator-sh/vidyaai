@@ -562,3 +562,206 @@
     font-size: 14px;
   }
 }
+
+
+/* Registration Progress Indicator */
+.register-progress {
+  margin-bottom: 40px;
+  padding: 20px 0;
+}
+
+.register-progress-steps {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+}
+
+.register-progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  z-index: 2;
+}
+
+.register-progress-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #d0d0d0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Sora', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #999;
+  transition: all 0.3s;
+  box-shadow: 2px 2px 0 #d0d0d0;
+}
+
+.register-progress-step.active .register-progress-circle {
+  background: #ff9500;
+  border-color: #000;
+  color: #fff;
+  box-shadow: 3px 3px 0 #000;
+}
+
+.register-progress-step.completed .register-progress-circle {
+  background: #4caf50;
+  border-color: #000;
+  color: #fff;
+  box-shadow: 3px 3px 0 #000;
+}
+
+.register-progress-label {
+  font-family: 'Sora', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.register-progress-step.active .register-progress-label {
+  color: #1a1a1a;
+}
+
+.register-progress-step.completed .register-progress-label {
+  color: #4caf50;
+}
+
+.register-progress-line {
+  flex: 1;
+  height: 3px;
+  background: #d0d0d0;
+  margin: 0 12px;
+  position: relative;
+  top: -20px;
+  transition: all 0.3s;
+}
+
+.register-progress-line.completed {
+  background: #4caf50;
+}
+
+/* Button Group */
+.register-button-group {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.auth-back-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 24px;
+  font-family: 'Sora', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  background: #fff;
+  color: #666;
+  border: 3px solid #000;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 3px 3px 0 #000;
+}
+
+.auth-back-btn:hover {
+  background: #f0f0f0;
+  color: #1a1a1a;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 #000;
+}
+
+.auth-signin-btn {
+  flex: 2;
+}
+
+.auth-signin-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.auth-signin-btn:disabled:hover {
+  transform: none !important;
+  box-shadow: 3px 3px 0 #000 !important;
+}
+
+/* Select Dropdown Styling */
+.auth-field-input select,
+select.auth-field-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 40px;
+  cursor: pointer;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .register-progress {
+    margin-bottom: 32px;
+    padding: 16px 0;
+  }
+
+  .register-progress-circle {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+
+  .register-progress-label {
+    font-size: 10px;
+  }
+
+  .register-progress-line {
+    margin: 0 8px;
+    top: -18px;
+  }
+
+  .register-button-group {
+    flex-direction: column;
+  }
+
+  .auth-back-btn,
+  .auth-signin-btn {
+    flex: 1;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .register-progress-circle {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+    border: 2px solid #d0d0d0;
+    box-shadow: 2px 2px 0 #d0d0d0;
+  }
+
+  .register-progress-step.active .register-progress-circle,
+  .register-progress-step.completed .register-progress-circle {
+    border: 2px solid #000;
+    box-shadow: 2px 2px 0 #000;
+  }
+
+  .register-progress-label {
+    font-size: 9px;
+  }
+
+  .register-progress-line {
+    height: 2px;
+    margin: 0 6px;
+    top: -16px;
+  }
+}
