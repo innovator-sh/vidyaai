@@ -68,6 +68,9 @@ export default function Chat() {
   const [collapsedMessages, setCollapsedMessages] = useState<Set<number>>(new Set());
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState<number | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -89,6 +92,85 @@ export default function Chat() {
       u.onend = () => setIsSpeaking(null);
       window.speechSynthesis.speak(u);
       setIsSpeaking(idx);
+    }
+  };
+
+  const stopRecordingAndGetTranscript = (): Promise<string | null> => {
+    return new Promise((resolve) => {
+      if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording') {
+        resolve(null);
+        return;
+      }
+      const mediaRecorder = mediaRecorderRef.current;
+
+      const handleStop = async () => {
+        setIsTyping(true);
+        const mimeType = mediaRecorder.mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        mediaRecorder.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+
+        const formData = new FormData();
+        const fileExt = mimeType.includes('mp4') ? 'mp4' : 'webm';
+        formData.append('file', audioBlob, `audio.${fileExt}`);
+
+        try {
+          const res = await fetch('/api/speech-to-text', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await res.json();
+          if (data.transcript) {
+            resolve(data.transcript);
+          } else {
+            console.error(data.error);
+            resolve(null);
+          }
+        } catch (e) {
+          console.error('Translation error', e);
+          resolve(null);
+        } finally {
+          setIsTyping(false);
+        }
+      };
+
+      mediaRecorder.onstop = handleStop;
+      mediaRecorder.stop();
+      setIsRecording(false);
+    });
+  };
+
+  const handleToggleMic = async () => {
+    if (isRecording) {
+      const transcript = await stopRecordingAndGetTranscript();
+      if (transcript) {
+        setInput(prev => prev + (prev ? ' ' : '') + transcript);
+      }
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let mimeType = 'audio/mp4';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm;codecs=opus';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = '';
+      }
+      const options = mimeType ? { mimeType } : undefined;
+      const mediaRecorder = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Microphone access denied:', err);
+      alert('Could not access microphone.');
     }
   };
 
@@ -174,11 +256,21 @@ export default function Chat() {
   }, [user?.uid]);
 
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!input.trim() && !attachedFile) return;
+  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>, overrideInput?: string) => {
+    e?.preventDefault();
 
-    const userInput = input;
+    let textToSubmit = overrideInput !== undefined ? overrideInput : input;
+
+    if (isRecording) {
+      const transcript = await stopRecordingAndGetTranscript();
+      if (transcript) {
+        textToSubmit = textToSubmit ? textToSubmit + ' ' + transcript : transcript;
+      }
+    }
+
+    if (!textToSubmit.trim() && !attachedFile) return;
+
+    const userInput = textToSubmit;
     const imageFile = attachedFile;
 
     // Build display content for the user's message
@@ -730,7 +822,7 @@ export default function Chat() {
                       </Select.Content>
                     </Select>
                   </div>
-                  <button className="search-submit-btn" onClick={(e) => { if (input.trim()) handleSubmit(e as any); }} title="Send message"><ArrowRight size={20} weight="bold" /></button>
+                  <button className="search-submit-btn" onClick={(e) => { if (input.trim() || isRecording) handleSubmit(); }} title="Send message"><ArrowRight size={20} weight="bold" /></button>
                 </div>
               </div>
             </div>
@@ -826,7 +918,9 @@ export default function Chat() {
                   <button className="file-remove-btn" onClick={handleRemoveFile} title="Remove file"><X size={14} weight="bold" /></button>
                 </div>
               )}
-              <button className="floating-mic-btn" onClick={() => console.log('Voice input')} title="Voice input"><Microphone size={20} weight="bold" /></button>
+              <button className={`floating-mic-btn ${isRecording ? 'recording' : ''}`} onClick={handleToggleMic} title={isRecording ? 'Stop recording' : 'Voice input'}>
+                <Microphone size={20} weight={isRecording ? "fill" : "bold"} color={isRecording ? "#ef4444" : "currentColor"} className={isRecording ? "animate-pulse" : ""} />
+              </button>
               <textarea
                 className="floating-textarea"
                 placeholder="Ask anything..."
@@ -860,7 +954,7 @@ export default function Chat() {
                         <button className="mobile-menu-item" onClick={() => { fileInputRef.current?.click(); setShowMobileMenu(false); }}><Paperclip size={20} /><span>Attach File</span></button>
                         <div className="mobile-menu-divider" />
                         <div className="mobile-menu-label">Change Mode</div>
-                        <button className={`mobile-menu-item ${selectedMode === 'study-buddy' ? 'active' : ''}`} onClick={() => { setSelectedMode('study-buddy'); setShowMobileMenu(false); }}><img src="/study-buddy.svg" alt="" className="mobile-menu-icon" /><span>Study Buddy</span></button>
+                        <button className={`mobile-menu-item ${selectedMode === 'study-buddy' ? 'active' : ''}`} onClick={() => { setSelectedMode(''); setShowMobileMenu(false); }}><img src="/study-buddy.svg" alt="" className="mobile-menu-icon" /><span>Study Buddy</span></button>
                         <button className={`mobile-menu-item ${selectedMode === 'teacher' ? 'active' : ''}`} onClick={() => { setSelectedMode('teacher'); setShowMobileMenu(false); }}><img src="/teacher.svg" alt="" className="mobile-menu-icon" /><span>Teacher</span></button>
                         <button className={`mobile-menu-item ${selectedMode === 'mentor' ? 'active' : ''}`} onClick={() => { setSelectedMode('mentor'); setShowMobileMenu(false); }}><img src="/mentor.svg" alt="" className="mobile-menu-icon" /><span>Mentor</span></button>
                       </div>
