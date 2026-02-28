@@ -1,0 +1,30 @@
+Modified: OCR/vidyaai_rag/inject_mock_history.py
+Modified: OCR/vidyaai_rag/main.py
+Modified: OCR/vidyaai_rag/requirements.txt
+Modified: OCR/vidyaai_rag/test_rerank.py
+Only in OCR/vidyaai_rag: ARCHITECTURE_WITH_OCR.md
+Only in OCR/vidyaai_rag: OCR_INTEGRATION.md
+Only in OCR/vidyaai_rag: README.md
+Modified: OCR/vidyaai_rag\api\routes/ocr.py
+Modified: OCR/vidyaai_rag\api\routes/rag_session.py
+Modified: OCR/vidyaai_rag\chroma_db/chroma.sqlite3
+Modified: OCR/vidyaai_rag\chroma_db\e1006d83-2668-43f8-9421-933d68ebade9/data_level0.bin
+Modified: OCR/vidyaai_rag\memory/session_memory.py
+Modified: OCR/vidyaai_rag\memory/student_memory.py
+Modified: OCR/vidyaai_rag\models/schemas.py
+Modified: OCR/vidyaai_rag\pipeline/graph.py
+Modified: OCR/vidyaai_rag\pipeline/state.py
+Modified: OCR/vidyaai_rag\pipeline\nodes/analyze_doubt.py
+Modified: OCR/vidyaai_rag\pipeline\nodes/fetch_background.py
+Modified: OCR/vidyaai_rag\pipeline\nodes/ingest_document.py
+Modified: OCR/vidyaai_rag\pipeline\nodes/load_student_context.py
+Modified: OCR/vidyaai_rag\pipeline\nodes/rerank_documents.py
+Modified: OCR/vidyaai_rag\pipeline\nodes/solve_doubt.py
+Modified: OCR/vidyaai_rag\pipeline\nodes/update_student_memory.py
+Modified: OCR/vidyaai_rag\prompts/background_concepts_prompt.py
+Modified: OCR/vidyaai_rag\prompts/rerank_prompt.py
+Modified: OCR/vidyaai_rag\prompts/root_cause_prompt.py
+Modified: OCR/vidyaai_rag\prompts/system_prompt.py
+Modified: OCR/vidyaai_rag\utils/document_cache.py
+Modified: OCR/vidyaai_rag\utils/llm_client.py
+Modified: OCR/vidyaai_rag\utils/ocr.py

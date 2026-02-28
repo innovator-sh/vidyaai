@@ -1,0 +1,21 @@
+# VidyaAI RAG Pipeline — Dependencies
+langchain
+langchain_community
+langchain_core
+langchain_groq
+langchain-huggingface
+langchain-text-splitters
+langgraph
+sentence-transformers
+faiss-cpu
+chromadb
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic
+langchain_openai
+
+# OCR Dependencies
+sarvamai
+pix2tex
+pillow
