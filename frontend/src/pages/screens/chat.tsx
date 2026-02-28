@@ -7,8 +7,10 @@ import { Select } from '../../components/retroui/Select';
 import VerticalNav from '../../components/VerticalNav';
 import { useAuth } from '../../contexts/AuthContext';
 import MarkdownMessage from '../../components/MarkdownMessage';
+import ActionMenu from '../../components/ActionMenu';
 import { useAdaptivePersona } from '../../hooks/useAdaptivePersona';
 import { PersonaType } from '../../types/adaptive-persona';
+import { addQuizResult, addChatSession } from '../../utils/statsTracker';
 import dynamic from 'next/dynamic';
 
 const MermaidDiagram = dynamic(() => import('../../components/MermaidDiagram'), {
@@ -77,6 +79,23 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
+  // Quiz Modal State
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [quizData, setQuizData] = useState<any>(null);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [selectedAnswers, setSelectedAnswers] = useState<(number | null)[]>([]);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [quizScore, setQuizScore] = useState(0);
+  const [quizFinished, setQuizFinished] = useState(false);
+
+  // Web Speech Recognition State
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const recognitionRef = useRef<any>(null);
+
+  // Session tracking for stats
+  const sessionStartTimeRef = useRef<number>(Date.now());
+  const messageCountRef = useRef<number>(0);
+
   // Adaptive Persona Engine Integration
   const {
     currentPersona,
@@ -108,6 +127,79 @@ export default function Chat() {
       window.speechSynthesis.cancel();
     };
   }, []);
+
+  // Initialize Web Speech Recognition
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: any) => {
+        let interim = '';
+        let final = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            final += transcript;
+          } else {
+            interim += transcript;
+          }
+        }
+
+        if (interim) {
+          setInterimTranscript(interim);
+        }
+
+        if (final) {
+          setInput(prev => prev + (prev ? ' ' : '') + final);
+          setInterimTranscript('');
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        if (event.error === 'not-allowed') {
+          alert('Microphone permission denied. Please enable microphone access.');
+        } else if (event.error === 'audio-capture') {
+          alert('No microphone detected. Please connect a microphone.');
+        }
+        setIsRecording(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+        setInterimTranscript('');
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
+  // Track session for stats
+  useEffect(() => {
+    return () => {
+      // Save session stats on unmount
+      const duration = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000);
+      if (messageCountRef.current > 0) {
+        addChatSession({
+          subject: currentPersona || 'General',
+          messageCount: messageCountRef.current,
+          duration,
+        });
+      }
+    };
+  }, [currentPersona]);
 
   const handleToggleSpeech = (text: string, idx: number) => {
     if (isSpeaking === idx) {
@@ -167,6 +259,24 @@ export default function Chat() {
   };
 
   const handleToggleMic = async () => {
+    // Try Web Speech API first
+    if (recognitionRef.current) {
+      if (isRecording) {
+        recognitionRef.current.stop();
+        setIsRecording(false);
+        setInterimTranscript('');
+      } else {
+        try {
+          recognitionRef.current.start();
+          setIsRecording(true);
+        } catch (err) {
+          console.error('Speech recognition start error:', err);
+        }
+      }
+      return;
+    }
+
+    // Fallback to MediaRecorder
     if (isRecording) {
       const transcript = await stopRecordingAndGetTranscript();
       if (transcript) {
@@ -310,6 +420,9 @@ export default function Chat() {
     setAttachedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setIsTyping(true);
+    
+    // Track message count for stats
+    messageCountRef.current += 1;
 
     try {
       let effectiveDocumentContext = documentContext || undefined;
@@ -664,6 +777,84 @@ export default function Chat() {
     }
   };
 
+  // Quiz generation
+  const handleGenerateQuiz = async (content: string) => {
+    try {
+      const response = await fetch('/api/generate-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to generate quiz');
+      
+      const data = await response.json();
+      if (data.quiz && data.quiz.questions) {
+        setQuizData(data.quiz);
+        setCurrentQuestionIndex(0);
+        setSelectedAnswers(new Array(data.quiz.questions.length).fill(null));
+        setShowFeedback(false);
+        setQuizScore(0);
+        setQuizFinished(false);
+        setShowQuizModal(true);
+      }
+    } catch (error) {
+      console.error('Quiz generation error:', error);
+      alert('Failed to generate quiz. Please try again.');
+    }
+  };
+
+  const handleQuizAnswer = (answerIndex: number) => {
+    if (selectedAnswers[currentQuestionIndex] !== null) return; // Already answered
+    
+    const newAnswers = [...selectedAnswers];
+    newAnswers[currentQuestionIndex] = answerIndex;
+    setSelectedAnswers(newAnswers);
+    setShowFeedback(true);
+
+    // Update score if correct
+    if (answerIndex === quizData.questions[currentQuestionIndex].correctAnswer) {
+      setQuizScore(prev => prev + 1);
+    }
+  };
+
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < quizData.questions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+      setShowFeedback(selectedAnswers[currentQuestionIndex + 1] !== null);
+    }
+  };
+
+  const handlePrevQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+      setShowFeedback(selectedAnswers[currentQuestionIndex - 1] !== null);
+    }
+  };
+
+  const handleFinishQuiz = () => {
+    setQuizFinished(true);
+    const percentage = Math.round((quizScore / quizData.questions.length) * 100);
+    
+    // Save quiz result to stats
+    addQuizResult({
+      subject: currentPersona || 'General',
+      topic: 'Quiz',
+      score: quizScore,
+      totalQuestions: quizData.questions.length,
+    });
+  };
+
+  const handleCloseQuiz = () => {
+    setShowQuizModal(false);
+    setQuizData(null);
+    setCurrentQuestionIndex(0);
+    setSelectedAnswers([]);
+    setShowFeedback(false);
+    setQuizScore(0);
+    setQuizFinished(false);
+  };
+
 
   return (
     <div className={`chat-exact ${nightMode ? 'night-mode' : ''}`}>
@@ -709,27 +900,6 @@ export default function Chat() {
         {!sidebarCollapsed && (
           <>
             <div className="sidebar-section">
-              <h3 className="sidebar-section-title">RECENT CHATS</h3>
-              <div className="sidebar-chat-list">
-                {recentChats.length > 0 ? (
-                  recentChats.map(chat => (
-                    <button
-                      key={chat.id}
-                      className="sidebar-chat-item"
-                      onClick={() => router.push('/screens/history')}
-                      title={chat.title}
-                    >
-                      <ChatCircleDots size={20} />
-                      <span>{chat.title.length > 22 ? chat.title.slice(0, 22) + 'â€¦' : chat.title}</span>
-                    </button>
-                  ))
-                ) : (
-                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', padding: '4px 8px' }}>No chats yet</p>
-                )}
-              </div>
-            </div>
-
-            <div className="sidebar-section">
               <button className="sidebar-section-header" onClick={() => setShowKnowledgeBase(!showKnowledgeBase)}>
                 <div className="sidebar-section-header-left">
                   <Books size={18} weight="bold" />
@@ -740,10 +910,28 @@ export default function Chat() {
             </div>
 
             <div className="sidebar-section">
+              <h3 className="sidebar-section-title">RECENT CHATS</h3>
+              <div className="sidebar-chat-list">
+                <button className="sidebar-chat-item" onClick={() => router.push('/screens/history')}>
+                  <ChatCircleDots size={20} />
+                  <span>Bio Notes: Mitosis</span>
+                </button>
+                <button className="sidebar-chat-item" onClick={() => router.push('/screens/history')}>
+                  <ChatCircleDots size={20} />
+                  <span>Organic Chem Formulas</span>
+                </button>
+                <button className="sidebar-chat-item" onClick={() => router.push('/screens/history')}>
+                  <ChatCircleDots size={20} />
+                  <span>Physics: Newton's Laws</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="sidebar-section">
               <h3 className="sidebar-section-title">FAVORITES</h3>
               <div className="sidebar-chat-list">
-                <button className="sidebar-chat-item favorite"><Star size={20} weight="fill" /><span>Bio Notes: Mitosis</span></button>
-                <button className="sidebar-chat-item favorite"><Star size={20} weight="fill" /><span>Organic Chem Formulas</span></button>
+                {/* <button className="sidebar-chat-item favorite"><Star size={20} weight="fill" /><span>Bio Notes: Mitosis</span></button> */}
+                {/* <button className="sidebar-chat-item favorite"><Star size={20} weight="fill" /><span>Organic Chem Formulas</span></button> */}
               </div>
             </div>
           </>
@@ -850,6 +1038,110 @@ export default function Chat() {
         </div>
       )}
 
+      {/* Quiz Modal */}
+      {showQuizModal && quizData && (
+        <div className="diagram-modal-overlay" onClick={() => !quizFinished && handleCloseQuiz()}>
+          <div className="quiz-modal" onClick={e => e.stopPropagation()}>
+            <div className="quiz-modal-header">
+              <h3 className="quiz-modal-title"><Exam size={24} weight="bold" /> Quiz</h3>
+              <button className="quiz-modal-close" onClick={handleCloseQuiz} title="Close"><X size={24} weight="bold" /></button>
+            </div>
+            <div className="quiz-modal-content">
+              {!quizFinished ? (
+                <>
+                  <div className="quiz-question-number">
+                    Question {currentQuestionIndex + 1} of {quizData.questions.length}
+                  </div>
+                  <div className="quiz-question-text">
+                    {quizData.questions[currentQuestionIndex].question}
+                  </div>
+                  <div className="quiz-options">
+                    {quizData.questions[currentQuestionIndex].options.map((option: string, idx: number) => {
+                      const isSelected = selectedAnswers[currentQuestionIndex] === idx;
+                      const isCorrect = idx === quizData.questions[currentQuestionIndex].correctAnswer;
+                      const showResult = showFeedback && selectedAnswers[currentQuestionIndex] !== null;
+                      
+                      let buttonClass = 'quiz-option-btn';
+                      if (showResult) {
+                        if (isSelected && isCorrect) buttonClass += ' correct';
+                        else if (isSelected && !isCorrect) buttonClass += ' incorrect';
+                        else if (isCorrect) buttonClass += ' correct-answer';
+                      } else if (isSelected) {
+                        buttonClass += ' selected';
+                      }
+
+                      return (
+                        <button
+                          key={idx}
+                          className={buttonClass}
+                          onClick={() => handleQuizAnswer(idx)}
+                          disabled={selectedAnswers[currentQuestionIndex] !== null}
+                        >
+                          {option}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {showFeedback && selectedAnswers[currentQuestionIndex] !== null && (
+                    <div className={`quiz-feedback ${selectedAnswers[currentQuestionIndex] === quizData.questions[currentQuestionIndex].correctAnswer ? 'correct' : 'incorrect'}`}>
+                      <div className="quiz-feedback-title">
+                        {selectedAnswers[currentQuestionIndex] === quizData.questions[currentQuestionIndex].correctAnswer ? '✓ Correct!' : '✗ Incorrect'}
+                      </div>
+                      <div className="quiz-feedback-text">
+                        {quizData.questions[currentQuestionIndex].explanation}
+                      </div>
+                    </div>
+                  )}
+                  <div className="quiz-navigation">
+                    <button
+                      className="quiz-nav-btn"
+                      onClick={handlePrevQuestion}
+                      disabled={currentQuestionIndex === 0}
+                    >
+                      <CaretLeft size={20} weight="bold" /> Previous
+                    </button>
+                    <div className="quiz-score">
+                      Score: {quizScore} / {quizData.questions.length}
+                    </div>
+                    {currentQuestionIndex < quizData.questions.length - 1 ? (
+                      <button
+                        className="quiz-nav-btn"
+                        onClick={handleNextQuestion}
+                        disabled={selectedAnswers[currentQuestionIndex] === null}
+                      >
+                        Next <CaretRight size={20} weight="bold" />
+                      </button>
+                    ) : (
+                      <button
+                        className="quiz-nav-btn quiz-finish-btn"
+                        onClick={handleFinishQuiz}
+                        disabled={selectedAnswers[currentQuestionIndex] === null}
+                      >
+                        Finish Quiz
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="quiz-summary">
+                  <div className="quiz-summary-icon">🎉</div>
+                  <h3 className="quiz-summary-title">Quiz Complete!</h3>
+                  <div className="quiz-summary-score">
+                    {quizScore} / {quizData.questions.length}
+                  </div>
+                  <div className="quiz-summary-percentage">
+                    {Math.round((quizScore / quizData.questions.length) * 100)}%
+                  </div>
+                  <button className="quiz-close-btn" onClick={handleCloseQuiz}>
+                    Close
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Scroll-to-Bottom Button */}
       {showScrollButton && messages.length > 0 && (
         <button className="scroll-to-bottom-btn" onClick={scrollToBottom} title="Scroll to bottom">
@@ -927,23 +1219,18 @@ export default function Chat() {
                     <button className="action-menu-btn" onClick={() => setShowActionMenu(showActionMenu === idx ? null : idx)} title="More actions">
                       <Plus size={16} weight="bold" />
                     </button>
-                    {showActionMenu === idx && (
-                      <>
-                        <div className="action-menu-overlay" onClick={() => setShowActionMenu(null)} />
-                        <div className="action-menu">
-                          <button className="action-menu-item" onClick={() => { handleGenerateFlowchart(msg.content, idx); setShowActionMenu(null); }}>
-                            <FlowArrow size={18} weight="bold" /><span>Generate Flowchart</span>
-                          </button>
-                          <button className="action-menu-item" onClick={() => { handleGenerateReport(msg.content); setShowActionMenu(null); }} disabled={isGeneratingReport}>
-                            <FileDoc size={18} weight="bold" /><span>{isGeneratingReport ? 'Generatingâ€¦' : 'Generate Report'}</span>
-                          </button>
-                          <button className="action-menu-item" onClick={() => { handleToggleSpeech(msg.content, idx); setShowActionMenu(null); }}>
-                            <SpeakerHigh size={18} weight={isSpeaking === idx ? "fill" : "bold"} />
-                            <span>{isSpeaking === idx ? 'Stop Audio' : 'Read Aloud'}</span>
-                          </button>
-                        </div>
-                      </>
-                    )}
+                    <ActionMenu
+                      isOpen={showActionMenu === idx}
+                      messageIndex={idx}
+                      messageContent={msg.content}
+                      isSpeaking={isSpeaking === idx}
+                      isGeneratingReport={isGeneratingReport}
+                      onClose={() => setShowActionMenu(null)}
+                      onGenerateFlowchart={handleGenerateFlowchart}
+                      onGenerateReport={handleGenerateReport}
+                      onGenerateQuiz={handleGenerateQuiz}
+                      onToggleSpeech={handleToggleSpeech}
+                    />
                   </div>
                 )}
                 <div className="msg-avatar-exact">{msg.role === 'ai' ? 'V' : 'Y'}</div>
