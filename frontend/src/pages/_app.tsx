@@ -9,6 +9,7 @@ import "@/styles/pillnav.css";
 import "@/styles/history.css";
 import "@/styles/account.css";
 import "@/styles/mobile-nav.css";
+import "@/styles/adaptive-persona.css";
 import type { AppProps } from "next/app";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";

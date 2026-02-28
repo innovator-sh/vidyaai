@@ -7,10 +7,12 @@ interface Message {
 
 interface ChatRequest {
   message: string;
-  mode: string;
+  mode: string; // Keep for backward compatibility, but will be overridden by adaptivePersona
   conversationHistory: Message[];
   documentContext?: string;  // OCR text, knowledge-base text, etc.
   firebase_uid?: string;
+  adaptivePersona?: string; // New field for adaptive persona system
+  sessionElapsedMinutes?: number; // For logging and analytics
 }
 
 interface ChatResponse {
@@ -46,10 +48,18 @@ export default async function handler(
     return res.status(405).json({ success: false, response: '', error: 'Method not allowed' });
   }
 
-  const { message, mode, conversationHistory, documentContext, firebase_uid } = req.body as ChatRequest;
+  const { message, mode, conversationHistory, documentContext, firebase_uid, adaptivePersona, sessionElapsedMinutes } = req.body as ChatRequest;
 
   if (!message?.trim()) {
     return res.status(400).json({ success: false, response: '', error: 'Message is required' });
+  }
+
+  // Use adaptive persona if provided, otherwise fall back to manual mode
+  const effectivePersona = adaptivePersona || mode;
+  
+  // Log persona usage for analytics (optional)
+  if (adaptivePersona && sessionElapsedMinutes !== undefined) {
+    console.log(`[AdaptivePersona] Using ${adaptivePersona} at ${sessionElapsedMinutes}min`);
   }
 
   // Build the final user message — always include document context (OCR text, KB text) if present
@@ -58,8 +68,8 @@ export default async function handler(
     : '';
   const finalUserMessage = message + ctxBlock;
 
-  // System prompt selection
-  const systemPrompt = getSystemPrompt(mode);
+  // System prompt selection - use effective persona (adaptive or manual)
+  const systemPrompt = getSystemPrompt(effectivePersona);
 
   const groqMessages = [
     { role: 'system', content: systemPrompt },
@@ -149,16 +159,16 @@ export default async function handler(
   });
 }
 
-function getSystemPrompt(mode: string): string {
+function getSystemPrompt(persona: string): string {
   const base =
     'You are VidyaAI, an intelligent educational AI tutor. ' +
     'When the user provides a <context> block, use it as the primary source of information to answer their question. ' +
     'Be detailed, accurate, and educational in your responses. Format using markdown where appropriate.';
 
   const personas: Record<string, string> = {
-    'study-buddy': `${base} Speak like a friendly study partner — encouraging, relatable examples, make learning fun.`,
-    teacher: `${base} Speak like an experienced teacher — structured explanations, step-by-step, check for understanding.`,
-    mentor: `${base} Speak like a wise mentor — strategic advice, big-picture thinking, career guidance.`,
+    'study-buddy': `${base} Speak like a friendly study partner — encouraging, relatable examples, make learning fun. Use casual language and provide emotional support. Keep responses conversational and upbeat.`,
+    teacher: `${base} Speak like an experienced teacher — structured explanations, step-by-step guidance, check for understanding. Be methodical and thorough. Break down complex concepts into digestible parts.`,
+    mentor: `${base} Speak like a wise mentor — strategic advice, big-picture thinking, career guidance. Focus on long-term learning goals and deeper insights. Ask thought-provoking questions and encourage independent thinking.`,
   };
-  return personas[mode] || personas['study-buddy'];
+  return personas[persona] || personas['study-buddy'];
 }

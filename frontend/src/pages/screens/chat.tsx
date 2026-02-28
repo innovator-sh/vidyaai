@@ -1,12 +1,14 @@
 ﻿import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { Plus, Database, Moon, ClockCounterClockwise, ChartPie, Waves, Gift, Paperclip, ArrowRight, FileText, Lightbulb, PencilSimple, Exam, CaretRight, CaretLeft, DotsThree, ChatCircleDots, Star, Microphone, X, Books, CaretDown, CaretUp, FolderOpen, PencilLine, FlowArrow, SpeakerHigh, Cards, FileDoc, Question, DownloadSimple } from 'phosphor-react';
+import { Plus, Database, Moon, ClockCounterClockwise, ChartPie, Waves, Gift, Paperclip, ArrowRight, FileText, Lightbulb, PencilSimple, Exam, CaretRight, CaretLeft, DotsThree, ChatCircleDots, Star, Microphone, X, Books, CaretDown, CaretUp, FolderOpen, PencilLine, FlowArrow, SpeakerHigh, Cards, FileDoc, Question, DownloadSimple, Timer, ArrowClockwise } from 'phosphor-react';
 import PillNav from '../../components/PillNav';
 import { Loader } from '../../components/retroui/Loader';
 import { Select } from '../../components/retroui/Select';
 import VerticalNav from '../../components/VerticalNav';
 import { useAuth } from '../../contexts/AuthContext';
 import MarkdownMessage from '../../components/MarkdownMessage';
+import { useAdaptivePersona } from '../../hooks/useAdaptivePersona';
+import { PersonaType } from '../../types/adaptive-persona';
 import dynamic from 'next/dynamic';
 
 const MermaidDiagram = dynamic(() => import('../../components/MermaidDiagram'), {
@@ -74,6 +76,31 @@ export default function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Adaptive Persona Engine Integration
+  const {
+    currentPersona,
+    elapsedMinutes,
+    sessionAnalytics,
+    personaDisplayInfo,
+    resetSession,
+    recordMessage,
+    getSystemPrompt,
+    getSessionSummary,
+    lastError,
+    clearError
+  } = useAdaptivePersona({
+    onPersonaSwitch: (oldPersona: PersonaType, newPersona: PersonaType) => {
+      console.log(`Persona switched from ${oldPersona} to ${newPersona}`);
+      // Optional: Show a subtle notification to the user
+    },
+    onError: (error) => {
+      console.error('Adaptive Persona Error:', error);
+    }
+  });
+
+  // State for showing session analytics
+  const [showSessionAnalytics, setShowSessionAnalytics] = useState(false);
 
   // Stop TTS when closing page
   useEffect(() => {
@@ -373,7 +400,9 @@ export default function Chat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userInput || 'Please analyze and explain the contents of the attached image in detail.',
-          mode: selectedMode,
+          mode: selectedMode, // Keep for backward compatibility
+          adaptivePersona: currentPersona, // Use adaptive persona
+          sessionElapsedMinutes: elapsedMinutes, // For analytics
           conversationHistory: messages,
           documentContext: effectiveDocumentContext,
           firebase_uid: user?.uid || undefined,
@@ -387,6 +416,9 @@ export default function Chat() {
       const data = await response.json();
 
       setIsTyping(false);
+
+      // Record message in analytics
+      recordMessage();
 
       // Check if response should include a diagram
       const shouldHaveDiagram = checkForDiagramKeywords(userInput);
@@ -538,6 +570,8 @@ export default function Chat() {
     setMessages([]);
     setInput('');
     setAttachedFile(null);
+    // Reset the adaptive persona session
+    resetSession();
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -773,6 +807,49 @@ export default function Chat() {
         </div>
       )}
 
+      {/* Session Analytics Modal */}
+      {showSessionAnalytics && (
+        <div className="diagram-modal-overlay" onClick={() => setShowSessionAnalytics(false)}>
+          <div className="diagram-modal" onClick={e => e.stopPropagation()}>
+            <div className="diagram-modal-header">
+              <h3 className="diagram-modal-title"><ChartPie size={24} weight="bold" /> Session Analytics</h3>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  className="diagram-modal-close" 
+                  onClick={() => resetSession()} 
+                  title="Reset Session"
+                  style={{ color: '#ef4444', fontWeight: 600, display: 'flex', gap: '6px', padding: '6px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px' }}
+                >
+                  <ArrowClockwise size={20} weight="bold" /> Reset Session
+                </button>
+                <button className="diagram-modal-close" onClick={() => setShowSessionAnalytics(false)} title="Close"><X size={24} weight="bold" /></button>
+              </div>
+            </div>
+            <div className="diagram-modal-content" style={{ background: '#fff', padding: '24px' }}>
+              <div className="session-analytics-content">
+                <div style={{ marginBottom: '20px' }}>
+                  <h4 style={{ margin: '0 0 10px 0', color: '#1f2937' }}>Current Session</h4>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '24px' }}>{personaDisplayInfo.icon}</span>
+                    <div>
+                      <div style={{ fontWeight: 600, color: personaDisplayInfo.color }}>{personaDisplayInfo.name}</div>
+                      <div style={{ fontSize: '14px', color: '#6b7280' }}>{personaDisplayInfo.description}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '8px' }}>
+                    <Timer size={16} style={{ marginRight: '4px' }} />
+                    Session Duration: {elapsedMinutes < 60 ? `${elapsedMinutes} minutes` : `${Math.floor(elapsedMinutes / 60)} hours ${elapsedMinutes % 60} minutes`}
+                  </div>
+                </div>
+                <div className="analytics-summary">
+                  <MarkdownMessage content={getSessionSummary()} isUser={false} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Scroll-to-Bottom Button */}
       {showScrollButton && messages.length > 0 && (
         <button className="scroll-to-bottom-btn" onClick={scrollToBottom} title="Scroll to bottom">
@@ -808,19 +885,15 @@ export default function Chat() {
                 />
                 <div className="search-actions">
                   <button className="search-attach-btn" onClick={() => fileInputRef.current?.click()} title="Attach file"><Paperclip size={20} /></button>
-                  <div className="mode-selector-wrapper">
-                    <Select value={selectedMode} onValueChange={setSelectedMode}>
-                      <Select.Trigger className="mode-selector-trigger icon-only">
-                        <img src={`/${selectedMode}.svg`} alt={selectedMode} className="mode-selector-icon" />
-                      </Select.Trigger>
-                      <Select.Content className="mode-selector-content">
-                        <Select.Item value="study-buddy" className="mode-selector-item"><div className="mode-option"><img src="/study-buddy.svg" alt="" className="mode-option-icon" /><span>Study Buddy</span></div></Select.Item>
-                        <Select.Separator className="mode-separator" />
-                        <Select.Item value="teacher" className="mode-selector-item"><div className="mode-option"><img src="/teacher.svg" alt="" className="mode-option-icon" /><span>Teacher</span></div></Select.Item>
-                        <Select.Separator className="mode-separator" />
-                        <Select.Item value="mentor" className="mode-selector-item"><div className="mode-option"><img src="/mentor.svg" alt="" className="mode-option-icon" /><span>Mentor</span></div></Select.Item>
-                      </Select.Content>
-                    </Select>
+                  <div className="adaptive-persona-display">
+                    <div className="persona-indicator" style={{ color: personaDisplayInfo.color }}>
+                      <span className="persona-icon">{personaDisplayInfo.icon}</span>
+                      <span className="persona-name">{personaDisplayInfo.name}</span>
+                    </div>
+                    <div className="session-timer">
+                      <Timer size={14} />
+                      <span>{elapsedMinutes < 60 ? `${elapsedMinutes}min` : `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}min`}</span>
+                    </div>
                   </div>
                   <button className="search-submit-btn" onClick={(e) => { if (input.trim() || isRecording) handleSubmit(); }} title="Send message"><ArrowRight size={20} weight="bold" /></button>
                 </div>
@@ -931,19 +1004,15 @@ export default function Chat() {
               />
               <div className="floating-actions">
                 <button className="floating-attach-btn desktop-only" onClick={() => fileInputRef.current?.click()} title="Attach file"><Paperclip size={20} /></button>
-                <div className="floating-mode-selector desktop-only">
-                  <Select value={selectedMode} onValueChange={setSelectedMode}>
-                    <Select.Trigger className="floating-mode-trigger icon-only">
-                      <img src={`/${selectedMode}.svg`} alt={selectedMode} className="mode-selector-icon" />
-                    </Select.Trigger>
-                    <Select.Content className="mode-selector-content">
-                      <Select.Item value="study-buddy" className="mode-selector-item"><div className="mode-option"><img src="/study-buddy.svg" alt="" className="mode-option-icon" /><span>Study Buddy</span></div></Select.Item>
-                      <Select.Separator className="mode-separator" />
-                      <Select.Item value="teacher" className="mode-selector-item"><div className="mode-option"><img src="/teacher.svg" alt="" className="mode-option-icon" /><span>Teacher</span></div></Select.Item>
-                      <Select.Separator className="mode-separator" />
-                      <Select.Item value="mentor" className="mode-selector-item"><div className="mode-option"><img src="/mentor.svg" alt="" className="mode-option-icon" /><span>Mentor</span></div></Select.Item>
-                    </Select.Content>
-                  </Select>
+                <div className="floating-adaptive-persona desktop-only">
+                  <div className="persona-indicator" style={{ color: personaDisplayInfo.color }}>
+                    <span className="persona-icon">{personaDisplayInfo.icon}</span>
+                    <span className="persona-name">{personaDisplayInfo.name}</span>
+                  </div>
+                  <div className="session-timer">
+                    <Timer size={14} />
+                    <span>{elapsedMinutes < 60 ? `${elapsedMinutes}min` : `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}min`}</span>
+                  </div>
                 </div>
                 <div className="mobile-menu-wrapper mobile-only">
                   <button className="mobile-menu-btn" onClick={() => setShowMobileMenu(!showMobileMenu)} title="Options"><DotsThree size={24} weight="bold" /></button>
@@ -953,10 +1022,21 @@ export default function Chat() {
                       <div className="mobile-menu-popup">
                         <button className="mobile-menu-item" onClick={() => { fileInputRef.current?.click(); setShowMobileMenu(false); }}><Paperclip size={20} /><span>Attach File</span></button>
                         <div className="mobile-menu-divider" />
-                        <div className="mobile-menu-label">Change Mode</div>
-                        <button className={`mobile-menu-item ${selectedMode === 'study-buddy' ? 'active' : ''}`} onClick={() => { setSelectedMode(''); setShowMobileMenu(false); }}><img src="/study-buddy.svg" alt="" className="mobile-menu-icon" /><span>Study Buddy</span></button>
-                        <button className={`mobile-menu-item ${selectedMode === 'teacher' ? 'active' : ''}`} onClick={() => { setSelectedMode('teacher'); setShowMobileMenu(false); }}><img src="/teacher.svg" alt="" className="mobile-menu-icon" /><span>Teacher</span></button>
-                        <button className={`mobile-menu-item ${selectedMode === 'mentor' ? 'active' : ''}`} onClick={() => { setSelectedMode('mentor'); setShowMobileMenu(false); }}><img src="/mentor.svg" alt="" className="mobile-menu-icon" /><span>Mentor</span></button>
+                        <div className="mobile-menu-label">Current Persona</div>
+                        <div className="mobile-menu-item active">
+                          <span className="persona-icon">{personaDisplayInfo.icon}</span>
+                          <span>{personaDisplayInfo.name}</span>
+                          <span className="persona-time">{elapsedMinutes < 60 ? `${elapsedMinutes}min` : `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}min`}</span>
+                        </div>
+                        <div className="mobile-menu-divider" />
+                        <button className="mobile-menu-item" onClick={() => { resetSession(); setShowMobileMenu(false); }}>
+                          <ArrowClockwise size={20} />
+                          <span>Reset Session</span>
+                        </button>
+                        <button className="mobile-menu-item" onClick={() => { setShowSessionAnalytics(true); setShowMobileMenu(false); }}>
+                          <ChartPie size={20} />
+                          <span>Session Analytics</span>
+                        </button>
                       </div>
                     </>
                   )}
