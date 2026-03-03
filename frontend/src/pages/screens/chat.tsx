@@ -1,6 +1,6 @@
 ﻿import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { Plus, Database, Moon, ClockCounterClockwise, ChartPie, Waves, Gift, Paperclip, ArrowRight, FileText, Lightbulb, PencilSimple, Exam, CaretRight, CaretLeft, DotsThree, ChatCircleDots, Star, Microphone, X, Books, CaretDown, CaretUp, FolderOpen, PencilLine, FlowArrow, SpeakerHigh, Cards, FileDoc, Question, DownloadSimple, Timer, ArrowClockwise } from 'phosphor-react';
+import { Plus, Database, Moon, ClockCounterClockwise, ChartPie, Waves, Gift, Paperclip, ArrowRight, FileText, Lightbulb, PencilSimple, Exam, CaretRight, CaretLeft, DotsThree, ChatCircleDots, Star, Microphone, X, Books, CaretDown, CaretUp, FolderOpen, PencilLine, FlowArrow, SpeakerHigh, Cards, FileDoc, Question, DownloadSimple, Timer, ArrowClockwise, SquaresFour, Stack, User } from 'phosphor-react';
 import PillNav from '../../components/PillNav';
 import { Loader } from '../../components/retroui/Loader';
 import { Select } from '../../components/retroui/Select';
@@ -58,6 +58,7 @@ export default function Chat() {
   const [isTyping, setIsTyping] = useState(false);
   const [selectedMode, setSelectedMode] = useState('study-buddy');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [showKnowledgeBase, setShowKnowledgeBase] = useState(false);
   const [ocrProcessing, setOcrProcessing] = useState(false);
@@ -131,10 +132,10 @@ export default function Chat() {
   // Initialize Web Speech Recognition
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
+
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
-      recognition.continuous = true;
+      recognition.continuous = false; // Change to false for standard toggle behavior Let it stop manually or auto
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
@@ -264,9 +265,15 @@ export default function Chat() {
       if (isRecording) {
         recognitionRef.current.stop();
         setIsRecording(false);
-        setInterimTranscript('');
+        // The onend handler will process any final transcript,
+        // but we want to make sure the user knows we stopped
+        if (interimTranscript) {
+          setInput(prev => prev + (prev ? ' ' : '') + interimTranscript);
+          setInterimTranscript('');
+        }
       } else {
         try {
+          recognitionRef.current.continuous = false; // toggle rather than hold continuous
           recognitionRef.current.start();
           setIsRecording(true);
         } catch (err) {
@@ -420,7 +427,7 @@ export default function Chat() {
     setAttachedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setIsTyping(true);
-    
+
     // Track message count for stats
     messageCountRef.current += 1;
 
@@ -785,9 +792,9 @@ export default function Chat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
       });
-      
+
       if (!response.ok) throw new Error('Failed to generate quiz');
-      
+
       const data = await response.json();
       if (data.quiz && data.quiz.questions) {
         setQuizData(data.quiz);
@@ -806,7 +813,7 @@ export default function Chat() {
 
   const handleQuizAnswer = (answerIndex: number) => {
     if (selectedAnswers[currentQuestionIndex] !== null) return; // Already answered
-    
+
     const newAnswers = [...selectedAnswers];
     newAnswers[currentQuestionIndex] = answerIndex;
     setSelectedAnswers(newAnswers);
@@ -835,7 +842,7 @@ export default function Chat() {
   const handleFinishQuiz = () => {
     setQuizFinished(true);
     const percentage = Math.round((quizScore / quizData.questions.length) * 100);
-    
+
     // Save quiz result to stats
     addQuizResult({
       subject: currentPersona || 'General',
@@ -899,15 +906,7 @@ export default function Chat() {
 
         {!sidebarCollapsed && (
           <>
-            <div className="sidebar-section">
-              <button className="sidebar-section-header" onClick={() => setShowKnowledgeBase(!showKnowledgeBase)}>
-                <div className="sidebar-section-header-left">
-                  <Books size={18} weight="bold" />
-                  <h3 className="sidebar-section-title">KNOWLEDGE BASE</h3>
-                </div>
-                {showKnowledgeBase ? <CaretUp size={16} weight="bold" /> : <CaretDown size={16} weight="bold" />}
-              </button>
-            </div>
+            
 
             <div className="sidebar-section">
               <h3 className="sidebar-section-title">RECENT CHATS</h3>
@@ -1002,9 +1001,9 @@ export default function Chat() {
             <div className="diagram-modal-header">
               <h3 className="diagram-modal-title"><ChartPie size={24} weight="bold" /> Session Analytics</h3>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button 
-                  className="diagram-modal-close" 
-                  onClick={() => resetSession()} 
+                <button
+                  className="diagram-modal-close"
+                  onClick={() => resetSession()}
                   title="Reset Session"
                   style={{ color: '#ef4444', fontWeight: 600, display: 'flex', gap: '6px', padding: '6px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px' }}
                 >
@@ -1060,7 +1059,7 @@ export default function Chat() {
                       const isSelected = selectedAnswers[currentQuestionIndex] === idx;
                       const isCorrect = idx === quizData.questions[currentQuestionIndex].correctAnswer;
                       const showResult = showFeedback && selectedAnswers[currentQuestionIndex] !== null;
-                      
+
                       let buttonClass = 'quiz-option-btn';
                       if (showResult) {
                         if (isSelected && isCorrect) buttonClass += ' correct';
@@ -1149,6 +1148,16 @@ export default function Chat() {
         </button>
       )}
 
+      {/* Mobile Top Header */}
+      <div className="mobile-chat-header mobile-only">
+        <button className="mobile-header-btn" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
+          {sidebarCollapsed ? <Stack size={20} weight="bold" /> : <X size={20} weight="bold" />}
+        </button>
+        <button className="mobile-header-btn" onClick={() => router.push('/screens/account')}>
+          <User size={20} weight="bold" />
+        </button>
+      </div>
+
       {/* Main Area */}
       <div className="main-exact">
         {messages.length === 0 ? (
@@ -1166,16 +1175,16 @@ export default function Chat() {
                     <button className="file-remove-btn" onClick={handleRemoveFile} title="Remove file"><X size={14} weight="bold" /></button>
                   </div>
                 )}
-                <button className="search-mic-btn" onClick={() => console.log('Voice input')} title="Voice input"><Microphone size={20} weight="bold" /></button>
+                <button className="search-mic-btn desktop-only" onClick={() => console.log('Voice input')} title="Voice input"><Microphone size={20} weight="bold" /></button>
                 <textarea
-                  className="search-textarea"
+                  className="search-textarea desktop-only"
                   placeholder="Ask anything or upload a file..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && input.trim()) { e.preventDefault(); handleSubmit(e as any); } }}
                   rows={1}
                 />
-                <div className="search-actions">
+                <div className="search-actions desktop-only">
                   <button className="search-attach-btn" onClick={() => fileInputRef.current?.click()} title="Attach file"><Paperclip size={20} /></button>
                   <div className="adaptive-persona-display">
                     <div className="persona-indicator" style={{ color: personaDisplayInfo.color }}>
@@ -1188,6 +1197,86 @@ export default function Chat() {
                     </div>
                   </div>
                   <button className="search-submit-btn" onClick={(e) => { if (input.trim() || isRecording) handleSubmit(); }} title="Send message"><ArrowRight size={20} weight="bold" /></button>
+                </div>
+
+                <div className="mobile-bottom-row mobile-only" style={{ alignItems: 'center', width: '100%', gap: '8px' }}>
+                  <div className="mobile-menu-wrapper">
+                    <button className="mobile-icon-btn plus-btn" onClick={() => setShowPlusMenu(!showPlusMenu)} style={{ width: '32px', height: '32px', border: '2px solid #000', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Plus size={20} weight="bold" color="#1a1a1a" />
+                    </button>
+                    {showPlusMenu && (
+                      <>
+                        <div className="mobile-menu-overlay" onClick={() => setShowPlusMenu(false)} />
+                        <div className="mobile-menu-popup left-popup">
+                          <button className="mobile-menu-item" onClick={() => { fileInputRef.current?.click(); setShowPlusMenu(false); }}><Paperclip size={20} /><span>Attach File</span></button>
+                          <div className="mobile-menu-divider" />
+                          <button className="mobile-menu-item" onClick={() => { handleToggleMic(); setShowPlusMenu(false); }}><Microphone size={20} /><span>Microphone</span></button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    {isRecording ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', fontWeight: 600 }}>
+                        <Waves size={24} className="animate-pulse" /> Listening...
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        className="floating-input-field"
+                        placeholder="Ask me anything..."
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyPress={(e) => { if (e.key === 'Enter' && input.trim()) { e.preventDefault(); handleSubmit(e as any); } }}
+                        style={{
+                          width: '100%',
+                          border: 'none',
+                          background: 'transparent',
+                          fontSize: '16px',
+                          outline: 'none',
+                          color: '#1a1a1a',
+                          padding: '0 4px'
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {(input.trim() || attachedFile || isRecording || ocrProcessing) ? (
+                      <button className="mobile-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { handleSubmit(e as any); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
+                        {ocrProcessing ? '⏳' : <ArrowRight size={18} weight="bold" color="#fff" />}
+                      </button>
+                    ) : (
+                      <div className="mobile-menu-wrapper">
+                        <button className="mobile-icon-btn dot-btn" onClick={() => setShowMobileMenu(!showMobileMenu)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <SquaresFour size={24} weight="bold" color="#666" />
+                        </button>
+                        {showMobileMenu && (
+                          <>
+                            <div className="mobile-menu-overlay" onClick={() => setShowMobileMenu(false)} />
+                            <div className="mobile-menu-popup right-popup">
+                              <div className="mobile-menu-label">Current Persona</div>
+                              <div className="mobile-menu-item active">
+                                <span className="persona-icon">{personaDisplayInfo.icon}</span>
+                                <span>{personaDisplayInfo.name}</span>
+                                <span className="persona-time">{elapsedMinutes < 60 ? `${elapsedMinutes}min` : `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}min`}</span>
+                              </div>
+                              <div className="mobile-menu-divider" />
+                              <button className="mobile-menu-item" onClick={() => { resetSession(); setShowMobileMenu(false); }}>
+                                <ArrowClockwise size={20} />
+                                <span>Reset Session</span>
+                              </button>
+                              <button className="mobile-menu-item" onClick={() => { setShowSessionAnalytics(true); setShowMobileMenu(false); }}>
+                                <ChartPie size={20} />
+                                <span>Study Mode</span>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1214,26 +1303,28 @@ export default function Chat() {
           <div className="messages-exact" ref={messagesContainerRef}>
             {messages.map((msg, idx) => (
               <div key={idx} className={`message-exact ${msg.role}`}>
-                {msg.role === 'ai' && (
-                  <div className="message-actions-left">
-                    <button className="action-menu-btn" onClick={() => setShowActionMenu(showActionMenu === idx ? null : idx)} title="More actions">
-                      <Plus size={16} weight="bold" />
-                    </button>
-                    <ActionMenu
-                      isOpen={showActionMenu === idx}
-                      messageIndex={idx}
-                      messageContent={msg.content}
-                      isSpeaking={isSpeaking === idx}
-                      isGeneratingReport={isGeneratingReport}
-                      onClose={() => setShowActionMenu(null)}
-                      onGenerateFlowchart={handleGenerateFlowchart}
-                      onGenerateReport={handleGenerateReport}
-                      onGenerateQuiz={handleGenerateQuiz}
-                      onToggleSpeech={handleToggleSpeech}
-                    />
-                  </div>
-                )}
-                <div className="msg-avatar-exact">{msg.role === 'ai' ? 'V' : 'Y'}</div>
+                <div className="message-sidebar-left">
+                  <div className="msg-avatar-exact">{msg.role === 'ai' ? 'V' : 'Y'}</div>
+                  {msg.role === 'ai' && (
+                    <div className="message-actions-left">
+                      <button className="action-menu-btn" onClick={() => setShowActionMenu(showActionMenu === idx ? null : idx)} title="More actions">
+                        <DotsThree size={24} weight="bold" color="#1a1a1a" />
+                      </button>
+                      <ActionMenu
+                        isOpen={showActionMenu === idx}
+                        messageIndex={idx}
+                        messageContent={msg.content}
+                        isSpeaking={isSpeaking === idx}
+                        isGeneratingReport={isGeneratingReport}
+                        onClose={() => setShowActionMenu(null)}
+                        onGenerateFlowchart={handleGenerateFlowchart}
+                        onGenerateReport={handleGenerateReport}
+                        onGenerateQuiz={handleGenerateQuiz}
+                        onToggleSpeech={handleToggleSpeech}
+                      />
+                    </div>
+                  )}
+                </div>
                 <div className="msg-content-wrapper">
                   {msg.role === 'ai' && msg.content.length > 300 && (
                     <button className="message-collapse-btn" onClick={() => toggleMessageCollapse(idx)} title={collapsedMessages.has(idx) ? 'Expand' : 'Collapse'}>
@@ -1278,20 +1369,20 @@ export default function Chat() {
                   <button className="file-remove-btn" onClick={handleRemoveFile} title="Remove file"><X size={14} weight="bold" /></button>
                 </div>
               )}
-              <button className={`floating-mic-btn ${isRecording ? 'recording' : ''}`} onClick={handleToggleMic} title={isRecording ? 'Stop recording' : 'Voice input'}>
+              <button className={`floating-mic-btn desktop-only ${isRecording ? 'recording' : ''}`} onClick={handleToggleMic} title={isRecording ? 'Stop recording' : 'Voice input'}>
                 <Microphone size={20} weight={isRecording ? "fill" : "bold"} color={isRecording ? "#ef4444" : "currentColor"} className={isRecording ? "animate-pulse" : ""} />
               </button>
               <textarea
-                className="floating-textarea"
+                className="floating-textarea desktop-only"
                 placeholder="Ask anything..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && input.trim()) { e.preventDefault(); handleSubmit(e as any); } }}
                 rows={1}
               />
-              <div className="floating-actions">
-                <button className="floating-attach-btn desktop-only" onClick={() => fileInputRef.current?.click()} title="Attach file"><Paperclip size={20} /></button>
-                <div className="floating-adaptive-persona desktop-only">
+              <div className="floating-actions desktop-only">
+                <button className="floating-attach-btn" onClick={() => fileInputRef.current?.click()} title="Attach file"><Paperclip size={20} /></button>
+                <div className="floating-adaptive-persona">
                   <div className="persona-indicator" style={{ color: personaDisplayInfo.color }}>
                     <span className="persona-icon">{personaDisplayInfo.icon}</span>
                     <span className="persona-name">{personaDisplayInfo.name}</span>
@@ -1301,36 +1392,89 @@ export default function Chat() {
                     <span>{elapsedMinutes < 60 ? `${elapsedMinutes}min` : `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}min`}</span>
                   </div>
                 </div>
-                <div className="mobile-menu-wrapper mobile-only">
-                  <button className="mobile-menu-btn" onClick={() => setShowMobileMenu(!showMobileMenu)} title="Options"><DotsThree size={24} weight="bold" /></button>
-                  {showMobileMenu && (
+                <button className="floating-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { if (input.trim() || attachedFile) handleSubmit(e as any); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
+                  {ocrProcessing ? '⏳' : <ArrowRight size={20} weight="bold" />}
+                </button>
+              </div>
+
+              <div className="floating-bottom-row mobile-only" style={{ alignItems: 'center', width: '100%', gap: '8px' }}>
+                <div className="mobile-menu-wrapper">
+                  <button className="mobile-icon-btn plus-btn" onClick={() => setShowPlusMenu(!showPlusMenu)} style={{ width: '32px', height: '32px', border: '2px solid #000', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Plus size={20} weight="bold" color="#1a1a1a" />
+                  </button>
+                  {showPlusMenu && (
                     <>
-                      <div className="mobile-menu-overlay" onClick={() => setShowMobileMenu(false)} />
-                      <div className="mobile-menu-popup">
-                        <button className="mobile-menu-item" onClick={() => { fileInputRef.current?.click(); setShowMobileMenu(false); }}><Paperclip size={20} /><span>Attach File</span></button>
+                      <div className="mobile-menu-overlay" onClick={() => setShowPlusMenu(false)} />
+                      <div className="mobile-menu-popup left-popup">
+                        <button className="mobile-menu-item" onClick={() => { fileInputRef.current?.click(); setShowPlusMenu(false); }}><Paperclip size={20} /><span>Attach File</span></button>
                         <div className="mobile-menu-divider" />
-                        <div className="mobile-menu-label">Current Persona</div>
-                        <div className="mobile-menu-item active">
-                          <span className="persona-icon">{personaDisplayInfo.icon}</span>
-                          <span>{personaDisplayInfo.name}</span>
-                          <span className="persona-time">{elapsedMinutes < 60 ? `${elapsedMinutes}min` : `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}min`}</span>
-                        </div>
-                        <div className="mobile-menu-divider" />
-                        <button className="mobile-menu-item" onClick={() => { resetSession(); setShowMobileMenu(false); }}>
-                          <ArrowClockwise size={20} />
-                          <span>Reset Session</span>
-                        </button>
-                        <button className="mobile-menu-item" onClick={() => { setShowSessionAnalytics(true); setShowMobileMenu(false); }}>
-                          <ChartPie size={20} />
-                          <span>Session Analytics</span>
-                        </button>
+                        <button className="mobile-menu-item" onClick={() => { handleToggleMic(); setShowPlusMenu(false); }}><Microphone size={20} /><span>Microphone</span></button>
                       </div>
                     </>
                   )}
                 </div>
-                <button className="floating-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { if (input.trim() || attachedFile) handleSubmit(e as any); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
-                  {ocrProcessing ? 'â³' : <ArrowRight size={20} weight="bold" />}
-                </button>
+
+                <div style={{ flex: 1 }}>
+                  {isRecording ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', fontWeight: 600 }}>
+                      <Waves size={24} className="animate-pulse" /> Listening...
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      className="floating-input-field"
+                      placeholder="Ask me anything..."
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyPress={(e) => { if (e.key === 'Enter' && input.trim()) { e.preventDefault(); handleSubmit(e as any); } }}
+                      style={{
+                        width: '100%',
+                        border: 'none',
+                        background: 'transparent',
+                        fontSize: '16px',
+                        outline: 'none',
+                        color: '#1a1a1a',
+                        padding: '0 4px'
+                      }}
+                    />
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {(input.trim() || attachedFile || isRecording || ocrProcessing) ? (
+                    <button className="mobile-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { handleSubmit(e as any); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
+                      {ocrProcessing ? '⏳' : <ArrowRight size={18} weight="bold" color="#fff" />}
+                    </button>
+                  ) : (
+                    <div className="mobile-menu-wrapper">
+                      <button className="mobile-icon-btn dot-btn" onClick={() => setShowMobileMenu(!showMobileMenu)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <SquaresFour size={24} weight="bold" color="#666" />
+                      </button>
+                      {showMobileMenu && (
+                        <>
+                          <div className="mobile-menu-overlay" onClick={() => setShowMobileMenu(false)} />
+                          <div className="mobile-menu-popup right-popup">
+                            <div className="mobile-menu-label">Current Persona</div>
+                            <div className="mobile-menu-item active">
+                              <span className="persona-icon">{personaDisplayInfo.icon}</span>
+                              <span>{personaDisplayInfo.name}</span>
+                              <span className="persona-time">{elapsedMinutes < 60 ? `${elapsedMinutes}min` : `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}min`}</span>
+                            </div>
+                            <div className="mobile-menu-divider" />
+                            <button className="mobile-menu-item" onClick={() => { resetSession(); setShowMobileMenu(false); }}>
+                              <ArrowClockwise size={20} />
+                              <span>Reset Session</span>
+                            </button>
+                            <button className="mobile-menu-item" onClick={() => { setShowSessionAnalytics(true); setShowMobileMenu(false); }}>
+                              <ChartPie size={20} />
+                              <span>Study Mode</span>
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -10,7 +10,7 @@ export default function VerticalNav() {
   const navItems = [
     { icon: House, path: '/', label: 'Home' },
     { icon: SquaresFour, path: '/screens/chat', label: 'Chat' },
-    { icon: ChartBar, path: '/screens/stats', label: 'Stats' },
+    // { icon: ChartBar, path: '/screens/stats', label: 'Stats' },
     { icon: User, path: '/screens/account', label: 'Account' },
   ];
 
@@ -22,7 +22,7 @@ export default function VerticalNav() {
         onClick={() => setIsExpanded(!isExpanded)}
         aria-label={isExpanded ? 'Collapse navigation' : 'Expand navigation'}
       >
-        {isExpanded ? <CaretRight size={16} weight="bold" /> : <CaretLeft size={16} weight="bold" />}
+        {isExpanded ? <CaretRight size={16} weight="regular" /> : <CaretLeft size={16} weight="regular" />}
       </button>
 
       {/* Vertical Navigation */}
@@ -31,7 +31,7 @@ export default function VerticalNav() {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentPath === item.path;
-            
+
             return (
               <button
                 key={item.path}
@@ -54,7 +54,7 @@ export default function VerticalNav() {
 
       {/* Overlay */}
       {isExpanded && (
-        <div 
+        <div
           className="vertical-nav-overlay"
           onClick={() => setIsExpanded(false)}
         />

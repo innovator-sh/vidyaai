@@ -19,7 +19,7 @@ export default function PillNav() {
   const navItems: NavItem[] = [
     { label: 'Home', path: '/', icon: <House size={20} weight="bold" /> },
     { label: 'Chat', path: '/screens/chat', icon: <ChatCircle size={20} weight="bold" /> },
-    { label: 'Stats', path: '/screens/stats', icon: <ChartBar size={20} weight="bold" /> },
+    // { label: 'Stats', path: '/screens/stats', icon: <ChartBar size={20} weight="bold" /> },
     { label: 'Account', path: '/screens/account', icon: <User size={20} weight="bold" /> },
   ];
 
@@ -90,13 +90,36 @@ export default function PillNav() {
 
   // Animate indicator with GSAP
   useEffect(() => {
-    if (indicatorRef.current) {
-      gsap.to(indicatorRef.current, {
-        x: `${activeIndex * 100}%`,
-        duration: 0.6,
-        ease: 'power3.out',
-      });
-    }
+    const updateIndicator = () => {
+      if (indicatorRef.current) {
+        const activeEl = navItemsRef.current[activeIndex];
+        if (activeEl) {
+          gsap.to(indicatorRef.current, {
+            x: activeEl.offsetLeft,
+            width: activeEl.offsetWidth,
+            duration: 0.6,
+            ease: 'power3.out',
+          });
+        }
+      }
+    };
+
+    updateIndicator();
+
+    const handleResize = () => {
+      if (indicatorRef.current) {
+        const activeEl = navItemsRef.current[activeIndex];
+        if (activeEl) {
+          gsap.set(indicatorRef.current, {
+            x: activeEl.offsetLeft,
+            width: activeEl.offsetWidth,
+          });
+        }
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, [activeIndex]);
 
   // Animate icon on hover

@@ -60,10 +60,9 @@
 
 .pill-nav-indicator {
   position: absolute;
-  left: 8px;
+  left: 0;
   top: 8px;
   bottom: 8px;
-  width: calc(25% - 8px);
   background: #FFE500;
   border: 2px solid #000;
   border-radius: 50px;
@@ -107,10 +106,9 @@
   }
 
   .pill-nav-indicator {
-    left: 6px;
+    left: 0;
     top: 6px;
     bottom: 6px;
-    width: calc(25% - 4px);
   }
 }
 

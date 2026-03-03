@@ -9,7 +9,7 @@ export default function MobileNav() {
     { icon: House, path: '/', label: 'Home' },
     { icon: SquaresFour, path: '/screens/chat', label: 'Chat' },
     { icon: Books, path: '/screens/knowledge-base', label: 'Knowledge' },
-    { icon: ChartBar, path: '/screens/stats', label: 'Stats' },
+    /* { icon: ChartBar, path: '/screens/stats', label: 'Stats' }, */
     { icon: User, path: '/screens/account', label: 'Account' },
   ];
 
