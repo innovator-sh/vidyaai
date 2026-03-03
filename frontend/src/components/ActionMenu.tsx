@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState, useLayoutEffect } from 'react';
 import { FlowArrow, FileDoc, Exam, SpeakerHigh } from 'phosphor-react';
 
 interface ActionMenuProps {
@@ -26,12 +26,33 @@ export default function ActionMenu({
   onGenerateQuiz,
   onToggleSpeech,
 }: ActionMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [openUpwards, setOpenUpwards] = useState(false);
+
+  useLayoutEffect(() => {
+    if (isOpen && menuRef.current) {
+      const rect = menuRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+
+      if (rect.bottom > windowHeight) {
+        setOpenUpwards(true);
+      } else {
+        setOpenUpwards(false);
+      }
+    } else if (!isOpen) {
+      setOpenUpwards(false);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
     <>
       <div className="action-menu-overlay" onClick={onClose} />
-      <div className="action-menu">
+      <div
+        ref={menuRef}
+        className={`action-menu ${openUpwards ? 'open-upwards' : ''}`}
+      >
         <button
           className="action-menu-item"
           onClick={() => {

@@ -418,11 +418,16 @@ export default function Chat() {
     const imageFile = attachedFile;
 
     // Build display content for the user's message
-    const displayContent = imageFile
+    const displayContent = (imageFile && !imagePreviewUrl)
       ? `${userInput}${userInput ? '\n' : ''}ðŸ“Ž ${imageFile.name}`
       : userInput;
 
-    setMessages(prev => [...prev, { role: 'user', content: displayContent }]);
+    const newMessage: Message = { role: 'user', content: displayContent };
+    if (imagePreviewUrl) {
+      newMessage.imageUrl = imagePreviewUrl;
+    }
+
+    setMessages(prev => [...prev, newMessage]);
     setInput('');
     setAttachedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -1176,10 +1181,14 @@ export default function Chat() {
 
             <div className="search-container">
               <div className="search-input-wrapper">
-                <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/png,image/jpeg,image/jpg" onChange={handleFileChange} />
+                <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,.pdf,.doc,.docx,.txt" onChange={handleFileChange} />
                 {attachedFile && (
-                  <div className="file-indicator">
-                    <Paperclip size={14} weight="bold" />
+                  <div className={`file-indicator ${imagePreviewUrl ? 'has-image' : ''}`}>
+                    {imagePreviewUrl ? (
+                      <img src={imagePreviewUrl} alt="Preview" className="file-indicator-preview-img" />
+                    ) : (
+                      <Paperclip size={14} weight="bold" />
+                    )}
                     <span className="file-name">{attachedFile.name}</span>
                     <button className="file-remove-btn" onClick={handleRemoveFile} title="Remove file"><X size={14} weight="bold" /></button>
                   </div>
@@ -1370,10 +1379,14 @@ export default function Chat() {
         {messages.length > 0 && (
           <div className="floating-input-area">
             <div className="floating-input-wrapper">
-              <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/png,image/jpeg,image/jpg" onChange={handleFileChange} />
+              <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,.pdf,.doc,.docx,.txt" onChange={handleFileChange} />
               {attachedFile && (
-                <div className="file-indicator">
-                  <Paperclip size={14} weight="bold" />
+                <div className={`file-indicator ${imagePreviewUrl ? 'has-image' : ''}`}>
+                  {imagePreviewUrl ? (
+                    <img src={imagePreviewUrl} alt="Preview" className="file-indicator-preview-img" />
+                  ) : (
+                    <Paperclip size={14} weight="bold" />
+                  )}
                   <span className="file-name">{attachedFile.name}</span>
                   <button className="file-remove-btn" onClick={handleRemoveFile} title="Remove file"><X size={14} weight="bold" /></button>
                 </div>

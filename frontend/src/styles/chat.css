@@ -2085,6 +2085,11 @@ textarea.desktop-only {
   min-width: 200px;
 }
 
+.action-menu.open-upwards {
+  top: auto;
+  bottom: 0;
+}
+
 .action-menu-item {
   display: flex;
   align-items: center;
@@ -2872,4 +2877,50 @@ textarea.desktop-only {
 
 .chat-exact.night-mode .sidebar-section-header:hover {
   color: #fff;
+}
+
+/* File indicator image preview extensions */
+.file-indicator.has-image {
+  top: -55px;
+  /* Increase negative space for image */
+  max-width: 250px;
+}
+
+.file-indicator-preview-img {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+  .file-indicator.has-image {
+    top: -50px;
+  }
+}
+
+/* Message image wrapper formatting */
+.message-exact.user .msg-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.message-exact.ai .msg-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* Make image preview large and clear inside chat */
+.message-image-preview {
+  max-width: 250px;
+  max-height: 250px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 3px solid #000;
+  box-shadow: 2px 2px 0 #000;
+  margin-bottom: 8px;
 }
