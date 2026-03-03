@@ -872,7 +872,14 @@ export default function Chat() {
       {kbDocName && (
         <div className="kb-context-banner">
           <FileText size={16} weight="bold" />
-          <span>Chatting with: <strong>{kbDocName}</strong></span>
+          <span className="desktop-only">Chatting with: <strong>{kbDocName}</strong></span>
+          <span className="mobile-only">
+            <strong>
+              {kbDocName.split(' ').length > 3
+                ? kbDocName.split(' ').slice(0, 3).join(' ') + '...'
+                : kbDocName}
+            </strong>
+          </span>
           <button
             className="kb-context-clear"
             onClick={() => { setKbDocName(''); setDocumentContext(''); router.replace('/screens/chat'); }}
@@ -906,7 +913,7 @@ export default function Chat() {
 
         {!sidebarCollapsed && (
           <>
-            
+
 
             <div className="sidebar-section">
               <h3 className="sidebar-section-title">RECENT CHATS</h3>
@@ -941,18 +948,20 @@ export default function Chat() {
             <Books size={24} weight="bold" />
             {!sidebarCollapsed && <span className="sidebar-label">Knowledge Base</span>}
           </a>
-          <button className="sidebar-btn" title="Memories">
-            <Database size={24} />
-            {!sidebarCollapsed && <span className="sidebar-label">Memories</span>}
-          </button>
+
           <button className="sidebar-btn" onClick={() => setNightMode(!nightMode)} title="Night Mode">
             <Moon size={24} weight={nightMode ? 'fill' : 'regular'} />
             {!sidebarCollapsed && <span className="sidebar-label">Night Mode</span>}
           </button>
+
           <a href="/screens/history" className="sidebar-btn" title="History">
             <ClockCounterClockwise size={24} />
             {!sidebarCollapsed && <span className="sidebar-label">History</span>}
           </a>
+          <button className="sidebar-btn" title="Memories">
+            <Database size={24} />
+            {!sidebarCollapsed && <span className="sidebar-label">Memories</span>}
+          </button>
         </div>
       </div>
 

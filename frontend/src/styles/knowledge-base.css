@@ -393,9 +393,11 @@
   0% {
     width: 0%;
   }
+
   50% {
     width: 70%;
   }
+
   100% {
     width: 100%;
   }
@@ -456,26 +458,29 @@
   gap: 6px;
 }
 
-.kb-doc-btn-menu {
+.kb-doc-btn-delete {
   width: 44px;
   height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
-  border: 2px solid #000;
+  border: 2px solid #ef4444;
+  /* Slight red */
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
-  color: #666;
+  color: #ef4444;
 }
 
-.kb-doc-btn-menu:hover {
-  background: #f5f3e8;
-  color: #1a1a1a;
+.kb-doc-btn-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  /* Darker red on hover */
+  border-color: #dc2626;
 }
 
-.kb-doc-btn-menu:active {
+.kb-doc-btn-delete:active {
   transform: scale(0.95);
 }
 
@@ -611,7 +616,7 @@
     justify-content: center;
   }
 
-  .kb-doc-btn-menu {
+  .kb-doc-btn-delete {
     width: 100%;
   }
 }

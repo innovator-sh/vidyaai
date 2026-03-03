@@ -305,10 +305,11 @@ export default function KnowledgeBase() {
                                         </button>
                                     )}
                                     <button
-                                        className="kb-doc-btn-menu"
+                                        className="kb-doc-btn-delete"
                                         onClick={() => handleDeleteDocument(doc.id)}
+                                        title="Delete document"
                                     >
-                                        <DotsThree size={24} weight="bold" />
+                                        <Trash size={24} weight="bold" />
                                     </button>
                                 </div>
                             </div>

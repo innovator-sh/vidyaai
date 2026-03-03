@@ -1976,6 +1976,15 @@ textarea.desktop-only {
   overflow: hidden;
 }
 
+@media (max-width: 768px) {
+  .kb-context-banner {
+    top: 72px;
+    /* Place it below the fixed mobile header */
+    max-width: calc(100vw - 32px);
+    /* Allow more space on small screens */
+  }
+}
+
 .kb-context-banner span {
   overflow: hidden;
   text-overflow: ellipsis;
