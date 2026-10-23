@@ -1,0 +1,2 @@
+# Known historical finding (commit d0a42c1, doc file). Key MUST be rotated; ignoring only so CI catches NEW leaks.
+d0a42c10e2eb47906b1d696674cea44ab336b9cb:backend/vidyaai_rag/OCR_INTEGRATION.md:generic-api-key:125
