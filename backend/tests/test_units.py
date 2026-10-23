@@ -69,7 +69,7 @@ def test_circuit_breaker_opens_and_half_opens() -> None:
     assert not cb.allow()
     import time
 
-    time.sleep(0.06)
+    time.sleep(0.25)  # generous margin: coarse clocks on Windows
     assert cb.allow()  # half-open probe
     cb.success()
     assert cb.allow()

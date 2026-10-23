@@ -34,6 +34,8 @@ dev = [
 
 [tool.uv]
 package = false
+# transitive via fastembed; 12.x has fixed HIGH/CRITICAL CVEs (Trivy), need >=13.0.0
+override-dependencies = ["pillow>=13.0.0"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
