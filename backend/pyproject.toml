@@ -1,0 +1,74 @@
+[project]
+name = "vidyaai-backend"
+version = "2.0.0"
+description = "VidyaAI API: FastAPI + Postgres + Qdrant + Groq/Sarvam"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi==0.161.1",
+    "uvicorn[standard]==0.54.0",
+    "python-multipart==0.0.32",
+    "pydantic==2.14.1",
+    "pydantic-settings==2.16.1",
+    "sqlalchemy[asyncio]==2.1.6",
+    "asyncpg==0.32.0",
+    "alembic==1.20.1",
+    "qdrant-client==1.20.0",
+    "fastembed==0.9.0",
+    "firebase-admin==7.7.0",
+    "httpx==0.28.1",
+    "groq==1.7.0",
+    "sarvamai==0.1.37",
+    "pypdf==6.21.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "aiosqlite==0.22.1",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "pytest-cov==7.1.0",
+    "ruff==0.17.2",
+    "mypy==2.4.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore:Local mode is not recommended:UserWarning",
+    "ignore:Payload indexes have no effect:UserWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [".venv", "vidyaai_rag"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "SIM", "RUF"]
+ignore = ["S101", "B008", "RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S311", "E501", "RUF007", "RUF059"]
+"alembic/**" = ["E501"]
+"app/services/generate.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["^vidyaai_rag/", "^\\.venv/"]
+ignore_missing_imports = true
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_untyped_calls = false

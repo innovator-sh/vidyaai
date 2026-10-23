@@ -1,0 +1,60 @@
+# Local development stack: Postgres 16 + Qdrant + backend.
+#   cp .env.example .env   (fill GROQ_API_KEY etc.)  then:  docker compose up --build
+# The backend container needs real FIREBASE_SERVICE_ACCOUNT_JSON to authenticate users.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: vidya
+      POSTGRES_PASSWORD: vidya_dev_only
+      POSTGRES_DB: vidyaai
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vidya -d vidyaai"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:v1.20.0
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrantdata:/qdrant/storage
+
+  migrate:
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql://vidya:vidya_dev_only@postgres:5432/vidyaai
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build: ./backend
+    environment:
+      ENV: ${ENV:-dev}
+      PORT: "8080"
+      DATABASE_URL: postgresql://vidya:vidya_dev_only@postgres:5432/vidyaai
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      SARVAM_API_KEY: ${SARVAM_API_KEY:-}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    ports:
+      - "127.0.0.1:8000:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      qdrant:
+        condition: service_started
+
+volumes:
+  pgdata:
+  qdrantdata:

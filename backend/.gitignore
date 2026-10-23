@@ -29,3 +29,10 @@ myvenv_broken/
 *.pdf
 
 firebase-service-account.json
+# tooling / local data
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+*.db
+*.sqlite3
