@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Eye, EyeSlash, ArrowRight } from 'phosphor-react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function Auth() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle, sendPasswordReset } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
@@ -22,11 +24,40 @@ export default function Auth() {
     try {
       await signIn(formData.email, formData.password);
       router.push('/screens/chat');
-    } catch (err: any) {
-      console.error('Login error:', err);
-      setError(err.message || 'Failed to sign in. Please check your credentials.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sign in. Please check your credentials.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    setError('');
+    setInfo('');
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+      router.push('/screens/chat');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Google sign-in failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgot = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setError('');
+    setInfo('');
+    if (!formData.email) {
+      setError('Enter your email above, then click "Forgot password?".');
+      return;
+    }
+    try {
+      await sendPasswordReset(formData.email);
+      setInfo('If an account exists for that email, a reset link is on its way.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send the reset email.');
     }
   };
 
@@ -55,13 +86,28 @@ export default function Auth() {
             </div>
           )}
 
+          {info && (
+            <div style={{
+              padding: '12px 16px',
+              marginBottom: '16px',
+              backgroundColor: '#efe',
+              border: '2px solid #060',
+              borderRadius: '8px',
+              color: '#060',
+              fontSize: '14px',
+              fontFamily: 'Sora, sans-serif'
+            }}>
+              {info}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="auth-form-split">
             <div className="auth-field">
-              <label className="auth-field-label">Username or Email</label>
+              <label className="auth-field-label">Email</label>
               <input
-                type="text"
+                type="email"
                 className="auth-field-input"
-                placeholder="@username"
+                placeholder="mail@domain.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
@@ -71,7 +117,7 @@ export default function Auth() {
             <div className="auth-field">
               <div className="auth-field-header">
                 <label className="auth-field-label">Password</label>
-                <a href="#" className="auth-forgot-link-inline">Forgot password?</a>
+                <a href="#" className="auth-forgot-link-inline" onClick={handleForgot}>Forgot password?</a>
               </div>
               <div className="auth-field-password">
                 <input
@@ -97,10 +143,15 @@ export default function Auth() {
               <ArrowRight size={18} weight="bold" />
             </button>
 
+            <div className="auth-divider-split"><span>or</span></div>
+
+            <button type="button" className="auth-social-btn-split google" onClick={handleGoogle} disabled={loading}>
+              <span>Continue with Google</span>
+            </button>
           </form>
 
           <p className="auth-register-text">
-            Don't have account? <a href="/register" className="auth-register-link">Register</a>
+            Don&apos;t have account? <Link href="/register" className="auth-register-link">Register</Link>
           </p>
         </div>
       </div>

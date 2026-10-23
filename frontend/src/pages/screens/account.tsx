@@ -5,6 +5,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useRouter } from 'next/router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
+import { api } from '../../lib/apiClient';
 
 interface UserProfile {
   fullname?: string;
@@ -12,7 +13,7 @@ interface UserProfile {
   degree?: string;
   college?: string;
   location?: string;
-  createdAt?: { toDate?: () => Date } | string | Date;
+  createdAt?: string;
 }
 
 function AccountPage() {
@@ -23,26 +24,42 @@ function AccountPage() {
   const [emailUpdates, setEmailUpdates] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [historyCount, setHistoryCount] = useState<number | null>(null);
+  const [streakDays, setStreakDays] = useState<number | null>(null);
 
-  // Load Firestore profile
+  // Load profile from the API
   useEffect(() => {
     getUserProfile().then((p) => {
       if (p) setProfile(p as UserProfile);
     });
   }, [getUserProfile]);
 
-  // Load real chat count from backend history
+  // Load chat count and streak from the API
   useEffect(() => {
     if (!user?.uid) return;
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    fetch(`${apiBase}/rag/session/history?firebase_uid=${encodeURIComponent(user.uid)}&limit=500`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setHistoryCount(data.length);
-        else if (data?.items) setHistoryCount(data.items.length);
+    api
+      .getStats()
+      .then((st) => {
+        setHistoryCount(st.chat_count);
+        setStreakDays(st.streak_days);
       })
       .catch(() => setHistoryCount(0));
   }, [user?.uid]);
+
+  const handleDownloadData = async () => {
+    try {
+      const data = await api.exportMe();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'vidyaai-data-export.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Could not export your data. Please try again.');
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -62,11 +79,11 @@ function AccountPage() {
 
   const displayEmail = user?.email || '';
 
-  const photoURL = (user as any)?.photoURL;
+  const photoURL = user?.photoURL;
 
   // Parse join date from Firebase metadata
   const joinDateStr = (() => {
-    const raw = (user as any)?.metadata?.creationTime;
+    const raw = profile?.createdAt || user?.creationTime;
     if (!raw) return 'Recently';
     const d = new Date(raw);
     return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
@@ -142,7 +159,7 @@ function AccountPage() {
               <PencilSimple size={18} weight="bold" />
               Edit Profile
             </button>
-            <button className="account-btn secondary">Download Data</button>
+            <button className="account-btn secondary" onClick={handleDownloadData}>Download Data</button>
           </div>
         </div>
 
@@ -195,7 +212,7 @@ function AccountPage() {
               </div>
               <div className="account-stat-content">
                 <div className="account-stat-label">Day Streak</div>
-                <div className="account-stat-value">—</div>
+                <div className="account-stat-value">{streakDays ?? '—'}</div>
                 <div className="account-stat-change daily">DAILY</div>
               </div>
             </div>

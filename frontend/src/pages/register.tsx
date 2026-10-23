@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Eye, EyeSlash, ArrowRight, ArrowLeft } from 'phosphor-react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function Register() {
@@ -39,7 +40,7 @@ export default function Register() {
     setError('');
 
     if (currentStep === totalSteps) {
-      // Final step - create Firebase account and store profile
+      // Final step - create the Firebase account; profile is saved to the API once the email is verified
       setLoading(true);
       try {
         await signUp(formData.email, formData.password, {
@@ -52,9 +53,8 @@ export default function Register() {
 
         // Redirect to chat on successful registration
         router.push('/screens/chat');
-      } catch (err: any) {
-        console.error('Registration error:', err);
-        setError(err.message || 'Failed to create account. Please try again.');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to create account. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -204,8 +204,8 @@ export default function Register() {
                     required
                   >
                     <option value="">Select degree level</option>
-                    <option value="bachelors">Bachelor's Degree</option>
-                    <option value="masters">Master's Degree</option>
+                    <option value="bachelors">Bachelor&apos;s Degree</option>
+                    <option value="masters">Master&apos;s Degree</option>
                     <option value="phd">PhD</option>
                     <option value="diploma">Diploma</option>
                     <option value="other">Other</option>
@@ -263,7 +263,7 @@ export default function Register() {
           </form>
 
           <p className="auth-register-text">
-            Already have an account? <a href="/auth" className="auth-register-link">Login</a>
+            Already have an account? <Link href="/auth" className="auth-register-link">Login</Link>
           </p>
         </div>
       </div>

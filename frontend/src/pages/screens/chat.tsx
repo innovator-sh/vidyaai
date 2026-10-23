@@ -1,17 +1,18 @@
 ﻿import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { Plus, Database, Moon, ClockCounterClockwise, ChartPie, Waves, Gift, Paperclip, ArrowRight, FileText, Lightbulb, PencilSimple, Exam, CaretRight, CaretLeft, DotsThree, ChatCircleDots, Star, Microphone, X, Books, CaretDown, CaretUp, FolderOpen, PencilLine, FlowArrow, SpeakerHigh, Cards, FileDoc, Question, DownloadSimple, Timer, ArrowClockwise, SquaresFour, Stack, User } from 'phosphor-react';
+import { Plus, Database, Moon, ClockCounterClockwise, ChartPie, Waves, Paperclip, ArrowRight, FileText, Lightbulb, PencilSimple, Exam, CaretRight, CaretLeft, DotsThree, ChatCircleDots, Star, Microphone, X, Books, CaretDown, CaretUp, FlowArrow, FileDoc, DownloadSimple, Timer, ArrowClockwise, SquaresFour, Stack, User } from 'phosphor-react';
 import PillNav from '../../components/PillNav';
 import { Loader } from '../../components/retroui/Loader';
-import { Select } from '../../components/retroui/Select';
 import VerticalNav from '../../components/VerticalNav';
 import { useAuth } from '../../contexts/AuthContext';
 import MarkdownMessage from '../../components/MarkdownMessage';
 import ActionMenu from '../../components/ActionMenu';
 import { useAdaptivePersona } from '../../hooks/useAdaptivePersona';
 import { PersonaType } from '../../types/adaptive-persona';
-import { addQuizResult, addChatSession } from '../../utils/statsTracker';
+import { ProtectedRoute } from '../../components/ProtectedRoute';
+import { api, ApiError, newMessageId, type QuizQuestion } from '../../lib/apiClient';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 
 const MermaidDiagram = dynamic(() => import('../../components/MermaidDiagram'), {
   ssr: false,
@@ -23,24 +24,71 @@ interface Message {
   hasDiagram?: boolean;
   diagramCode?: string;
   imageUrl?: string;
+  isError?: boolean;
+  key?: string;
 }
 
-export default function Chat() {
-  const router = useRouter();
-  const { user } = useAuth(); // for firebase_uid â€” needed to save chat history
+interface QuizData {
+  questions: QuizQuestion[];
+}
 
-  // Document context from Knowledge Base (docName query param)
-  const [documentContext, setDocumentContext] = useState<string>('');
+interface SpeechRecognitionResultLike {
+  isFinal: boolean;
+  0: { transcript: string };
+}
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+interface RecentChat {
+  id: string;
+  title: string;
+  is_favorite: boolean;
+}
+
+function errorText(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 429 && err.retryAfter) {
+      return `${err.message} (try again in ${err.retryAfter}s)`;
+    }
+    return err.message;
+  }
+  return 'Something went wrong. Please try again.';
+}
+
+function Chat() {
+  const router = useRouter();
+  const { user } = useAuth();
+
+  // Knowledge Base document selected via ?docId=...&docName=...
+  const [documentId, setDocumentId] = useState<string | null>(null);
   const [kbDocName, setKbDocName] = useState<string>('');
+  // Server-side conversation this chat is attached to (null until first message is sent)
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Read Knowledge Base doc from URL query on mount
   useEffect(() => {
-    if (router.isReady && router.query.docName) {
-      const name = router.query.docName as string;
-      setKbDocName(name);
-      setDocumentContext(name); // used as RAG document context
+    if (router.isReady && router.query.docId) {
+      setDocumentId(String(router.query.docId));
+      setKbDocName(router.query.docName ? String(router.query.docName) : 'Document');
     }
-  }, [router.isReady, router.query.docName]);
+  }, [router.isReady, router.query.docId, router.query.docName]);
 
   const navItems = [
     { label: 'Home', link: '/' },
@@ -56,13 +104,13 @@ export default function Chat() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [nightMode, setNightMode] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  const [selectedMode, setSelectedMode] = useState('study-buddy');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [showKnowledgeBase, setShowKnowledgeBase] = useState(false);
   const [ocrProcessing, setOcrProcessing] = useState(false);
-  const [recentChats, setRecentChats] = useState<{ id: string; title: string }[]>([]);
+  const [recentChats, setRecentChats] = useState<RecentChat[]>([]);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [showActionMenu, setShowActionMenu] = useState<number | null>(null);
   const [showDiagramModal, setShowDiagramModal] = useState(false);
   const [currentDiagram, setCurrentDiagram] = useState<string>('');
@@ -82,7 +130,7 @@ export default function Chat() {
 
   // Quiz Modal State
   const [showQuizModal, setShowQuizModal] = useState(false);
-  const [quizData, setQuizData] = useState<any>(null);
+  const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<(number | null)[]>([]);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -91,11 +139,7 @@ export default function Chat() {
 
   // Web Speech Recognition State
   const [interimTranscript, setInterimTranscript] = useState('');
-  const recognitionRef = useRef<any>(null);
-
-  // Session tracking for stats
-  const sessionStartTimeRef = useRef<number>(Date.now());
-  const messageCountRef = useRef<number>(0);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   // Adaptive Persona Engine Integration
   const {
@@ -131,7 +175,8 @@ export default function Chat() {
 
   // Initialize Web Speech Recognition
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const w = window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor };
+    const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
 
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
@@ -139,7 +184,7 @@ export default function Chat() {
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event) => {
         let interim = '';
         let final = '';
 
@@ -162,7 +207,7 @@ export default function Chat() {
         }
       };
 
-      recognition.onerror = (event: any) => {
+      recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
         if (event.error === 'not-allowed') {
           alert('Microphone permission denied. Please enable microphone access.');
@@ -187,20 +232,12 @@ export default function Chat() {
     };
   }, []);
 
-  // Track session for stats
+  // Abort any in-flight chat stream when leaving the page
   useEffect(() => {
     return () => {
-      // Save session stats on unmount
-      const duration = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000);
-      if (messageCountRef.current > 0) {
-        addChatSession({
-          subject: currentPersona || 'General',
-          messageCount: messageCountRef.current,
-          duration,
-        });
-      }
+      abortRef.current?.abort();
     };
-  }, [currentPersona]);
+  }, []);
 
   const handleToggleSpeech = (text: string, idx: number) => {
     if (isSpeaking === idx) {
@@ -229,24 +266,14 @@ export default function Chat() {
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         mediaRecorder.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
 
-        const formData = new FormData();
         const fileExt = mimeType.includes('mp4') ? 'mp4' : 'webm';
-        formData.append('file', audioBlob, `audio.${fileExt}`);
 
         try {
-          const res = await fetch('/api/speech-to-text', {
-            method: 'POST',
-            body: formData
-          });
-          const data = await res.json();
-          if (data.transcript) {
-            resolve(data.transcript);
-          } else {
-            console.error(data.error);
-            resolve(null);
-          }
+          const data = await api.stt(audioBlob, `audio.${fileExt}`);
+          resolve(data.text || null);
         } catch (e) {
-          console.error('Translation error', e);
+          console.error('Speech-to-text failed', e);
+          setChatError(errorText(e));
           resolve(null);
         } finally {
           setIsTyping(false);
@@ -362,14 +389,13 @@ export default function Chat() {
       container.appendChild(clone);
       document.body.appendChild(container);
 
-      // @ts-ignore
       const html2pdf = (await import('html2pdf.js')).default;
-      const opt: any = {
+      const opt = {
         margin: 15,
         filename: 'VidyaAI_Report.pdf',
-        image: { type: 'jpeg', quality: 0.98 },
+        image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
       };
 
       await html2pdf().set(opt).from(clone).save();
@@ -381,27 +407,43 @@ export default function Chat() {
     }
   };
 
-  // Fetch top 3 recent chats for sidebar
+  // Recent + favourite chats for the sidebar
+  const refreshRecentChats = useCallback(async () => {
+    try {
+      const resp = await api.listConversations({ limit: 20 });
+      setRecentChats(resp.items.map((c) => ({ id: c.id, title: c.title || 'Chat Session', is_favorite: c.is_favorite })));
+    } catch {
+      /* sidebar is non-critical */
+    }
+  }, []);
+
   useEffect(() => {
     if (!user?.uid) return;
-    fetch(`/api/history?firebase_uid=${encodeURIComponent(user.uid)}&limit=3`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.history) {
-          setRecentChats(
-            (data.history as any[]).slice(0, 3).map((h: any) => ({
-              id: h.id || '',
-              title: h.title || 'Chat Session',
-            }))
-          );
-        }
-      })
-      .catch(() => { });
-  }, [user?.uid]);
+    refreshRecentChats();
+  }, [user?.uid, refreshRecentChats]);
 
+  const openConversation = async (id: string) => {
+    abortRef.current?.abort();
+    setIsTyping(false);
+    setChatError(null);
+    try {
+      const conv = await api.getConversation(id);
+      setConversationId(conv.id);
+      setMessages(
+        conv.messages.map((m) => ({
+          role: m.role === 'user' ? 'user' : 'ai',
+          content: m.content,
+        })),
+      );
+      setSidebarCollapsed(true);
+    } catch (err) {
+      setChatError(errorText(err));
+    }
+  };
 
-  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>, overrideInput?: string) => {
+  const handleSubmit = async (e?: { preventDefault: () => void }, overrideInput?: string) => {
     e?.preventDefault();
+    if (isTyping || ocrProcessing) return;
 
     let textToSubmit = overrideInput !== undefined ? overrideInput : input;
 
@@ -417,9 +459,14 @@ export default function Chat() {
     const userInput = textToSubmit;
     const imageFile = attachedFile;
 
+    if (imageFile && !imageFile.type.startsWith('image/')) {
+      setChatError('Only image attachments are supported in chat. Add PDFs from the Knowledge Base.');
+      return;
+    }
+
     // Build display content for the user's message
     const displayContent = (imageFile && !imagePreviewUrl)
-      ? `${userInput}${userInput ? '\n' : ''}ðŸ“Ž ${imageFile.name}`
+      ? `${userInput}${userInput ? '\n' : ''}\u{1F4CE} ${imageFile.name}`
       : userInput;
 
     const newMessage: Message = { role: 'user', content: displayContent };
@@ -427,271 +474,97 @@ export default function Chat() {
       newMessage.imageUrl = imagePreviewUrl;
     }
 
+    setChatError(null);
     setMessages(prev => [...prev, newMessage]);
     setInput('');
     setAttachedFile(null);
+    setImagePreviewUrl(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setIsTyping(true);
 
-    // Track message count for stats
-    messageCountRef.current += 1;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    // Idempotency key: generated once per user message
+    const messageId = newMessageId();
+    let streamed = '';
+    const aiKey = `${messageId}:ai`;
+    let aiStarted = false;
+    let flushHandle: number | null = null;
+
+    const flush = () => {
+      flushHandle = null;
+      const text = streamed;
+      setMessages(prev => prev.map(m => (m.key === aiKey ? { ...m, content: text } : m)));
+    };
 
     try {
-      let effectiveDocumentContext = documentContext || undefined;
+      let messageText = userInput.trim();
 
       if (imageFile) {
         setOcrProcessing(true);
         try {
-          // Convert image to base64 for Groq Vision API
-          const base64Image = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const result = reader.result as string;
-              resolve(result.split(',')[1]); // strip data URL prefix
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(imageFile);
-          });
-
-          const mimeType = imageFile.type || 'image/jpeg';
-
-          // Call Groq Vision API directly from the browser
-          const visionRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${process.env.NEXT_PUBLIC_GROQ_API_KEY || ''}`,
-            },
-            body: JSON.stringify({
-              model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-              messages: [
-                {
-                  role: 'user',
-                  content: [
-                    {
-                      type: 'image_url',
-                      image_url: { url: `data:${mimeType};base64,${base64Image}` },
-                    },
-                    {
-                      type: 'text',
-                      text: userInput
-                        ? `The user asked: "${userInput}". Analyze the image in detail and answer their question. If the image contains handwritten or printed text, equations, or diagrams, extract and explain them all.`
-                        : 'Analyze this image in detail. Extract all readable text (handwritten or printed), equations, diagrams, or visual content. Describe what you see clearly and completely.',
-                    },
-                  ],
-                },
-              ],
-              temperature: 0.4,
-              max_tokens: 1024,
-            }),
-          });
-
-          if (visionRes.ok) {
-            const visionData = await visionRes.json();
-            const visionText = visionData.choices?.[0]?.message?.content || '';
-            if (visionText) {
-              setIsTyping(false);
-              setOcrProcessing(false);
-              setMessages(prev => [...prev, { role: 'ai', content: visionText }]);
-              // Save Q&A to backend history via proxy (no CORS)
-              if (user?.uid) {
-                fetch('/api/save', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    firebase_uid: user.uid,
-                    question: (userInput || imageFile.name).slice(0, 400),
-                    answer: visionText.slice(0, 400),
-                    subject: 'General',
-                  }),
-                }).catch(() => { });
-              }
-
-              return;
-            }
-          } else {
-            console.warn('[Vision] Groq Vision failed:', visionRes.status, await visionRes.text());
-          }
-        } catch (visionErr) {
-          console.warn('[Vision] Groq Vision error:', visionErr);
+          const ocr = await api.ocr(imageFile, 'handwriting');
+          const extracted = (ocr.text || '').trim();
+          messageText = [
+            messageText || 'Please analyze and explain the contents of the attached image in detail.',
+            extracted ? `\n\nText extracted from the attached image:\n${extracted}` : '',
+          ].join('');
         } finally {
           setOcrProcessing(false);
         }
       }
 
-      // Call the chat API endpoint, passing documentContext if set (from Knowledge Base or OCR)
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userInput || 'Please analyze and explain the contents of the attached image in detail.',
-          mode: selectedMode, // Keep for backward compatibility
-          adaptivePersona: currentPersona, // Use adaptive persona
-          sessionElapsedMinutes: elapsedMinutes, // For analytics
-          conversationHistory: messages,
-          documentContext: effectiveDocumentContext,
-          firebase_uid: user?.uid || undefined,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get response');
+      for await (const ev of api.chat(
+        {
+          conversation_id: conversationId,
+          message_id: messageId,
+          message: messageText.slice(0, 8000),
+          persona: currentPersona,
+          document_id: documentId,
+        },
+        controller.signal,
+      )) {
+        if (ev.type === 'meta') {
+          setConversationId(ev.conversation_id);
+        } else if (ev.type === 'token') {
+          if (!aiStarted) {
+            // First token: create the assistant message and hide the typing indicator
+            aiStarted = true;
+            setIsTyping(false);
+            setMessages(prev => [...prev, { role: 'ai', content: '', key: aiKey }]);
+          }
+          streamed += ev.text;
+          if (flushHandle === null) flushHandle = requestAnimationFrame(flush);
+        } else if (ev.type === 'done') {
+          recordMessage();
+        }
       }
-
-      const data = await response.json();
-
-      setIsTyping(false);
-
-      // Record message in analytics
-      recordMessage();
-
-      // Check if response should include a diagram
-      const shouldHaveDiagram = checkForDiagramKeywords(userInput);
-
-      if (shouldHaveDiagram) {
-        const diagramCode = generateMermaidDiagram(userInput);
-        setMessages(prev => [...prev, {
-          role: 'ai',
-          content: data.response || 'Here\'s a diagram to help visualize this concept:',
-          hasDiagram: true,
-          diagramCode: diagramCode
-        }]);
-      } else {
-        setMessages(prev => [...prev, {
-          role: 'ai',
-          content: data.response || 'I understand your question. Let me help you with that.',
-        }]);
-      }
+      if (flushHandle !== null) cancelAnimationFrame(flushHandle);
+      flush();
+      refreshRecentChats();
     } catch (error) {
-      console.error('Error calling chat API:', error);
+      if (flushHandle !== null) cancelAnimationFrame(flushHandle);
+      if ((error as { name?: string })?.name === 'AbortError') {
+        flush();
+        return;
+      }
+      console.error('Chat request failed:', error);
+      flush();
+      // Keep any partial answer, then append the real error
+      setMessages(prev => [...prev, { role: 'ai', content: errorText(error), isError: true }]);
+      refreshRecentChats();
+    } finally {
       setIsTyping(false);
-
-      // Fallback to local response
-      const diagramCode = generateMermaidDiagram(userInput);
-      setMessages(prev => [...prev, {
-        role: 'ai',
-        content: 'Here\'s a diagram to help visualize this concept:',
-        hasDiagram: true,
-        diagramCode: diagramCode
-      }]);
+      setOcrProcessing(false);
+      if (abortRef.current === controller) abortRef.current = null;
     }
-  };
-
-  const checkForDiagramKeywords = (input: string): boolean => {
-    const lowerInput = input.toLowerCase();
-    const diagramKeywords = [
-      'diagram', 'flowchart', 'process', 'flow', 'steps',
-      'class', 'object', 'inheritance', 'sequence', 'interaction',
-      'state', 'lifecycle', 'pie', 'distribution', 'percentage',
-      'git', 'branch', 'database', 'entity', 'relationship', 'visualize'
-    ];
-    return diagramKeywords.some(keyword => lowerInput.includes(keyword));
-  };
-
-  const generateMermaidDiagram = (input: string): string => {
-    const lowerInput = input.toLowerCase();
-
-    // Flowchart examples
-    if (lowerInput.includes('process') || lowerInput.includes('flow') || lowerInput.includes('steps')) {
-      return `graph TD
-    A[Start] --> B{Decision}
-    B -->|Yes| C[Process 1]
-    B -->|No| D[Process 2]
-    C --> E[End]
-    D --> E`;
-    }
-
-    // Class diagram
-    if (lowerInput.includes('class') || lowerInput.includes('object') || lowerInput.includes('inheritance')) {
-      return `classDiagram
-    Animal <|-- Dog
-    Animal <|-- Cat
-    Animal : +String name
-    Animal : +int age
-    Animal : +makeSound()
-    Dog : +String breed
-    Dog : +bark()
-    Cat : +String color
-    Cat : +meow()`;
-    }
-
-    // Sequence diagram
-    if (lowerInput.includes('sequence') || lowerInput.includes('interaction') || lowerInput.includes('communication')) {
-      return `sequenceDiagram
-    participant User
-    participant System
-    participant Database
-    User->>System: Request Data
-    System->>Database: Query
-    Database-->>System: Return Results
-    System-->>User: Display Data`;
-    }
-
-    // State diagram
-    if (lowerInput.includes('state') || lowerInput.includes('lifecycle')) {
-      return `stateDiagram-v2
-    [*] --> Idle
-    Idle --> Processing: Start
-    Processing --> Success: Complete
-    Processing --> Error: Fail
-    Success --> [*]
-    Error --> Idle: Retry`;
-    }
-
-    // Pie chart
-    if (lowerInput.includes('pie') || lowerInput.includes('distribution') || lowerInput.includes('percentage')) {
-      return `pie title Study Time Distribution
-    "Mathematics" : 30
-    "Physics" : 25
-    "Chemistry" : 20
-    "Biology" : 15
-    "Computer Science" : 10`;
-    }
-
-    // Git graph
-    if (lowerInput.includes('git') || lowerInput.includes('branch') || lowerInput.includes('version')) {
-      return `gitGraph
-    commit
-    commit
-    branch develop
-    checkout develop
-    commit
-    commit
-    checkout main
-    merge develop
-    commit`;
-    }
-
-    // Entity Relationship
-    if (lowerInput.includes('database') || lowerInput.includes('entity') || lowerInput.includes('relationship')) {
-      return `erDiagram
-    STUDENT ||--o{ ENROLLMENT : enrolls
-    STUDENT {
-        string name
-        int id
-        string email
-    }
-    COURSE ||--o{ ENROLLMENT : includes
-    COURSE {
-        string title
-        int code
-        int credits
-    }
-    ENROLLMENT {
-        date enrollDate
-        string grade
-    }`;
-    }
-
-    // Default flowchart
-    return `graph LR
-    A[Input: ${input.substring(0, 20)}...] --> B[Processing]
-    B --> C[Analysis]
-    C --> D[Result]
-    D --> E[Output]`;
   };
 
   const handleNewChat = () => {
+    abortRef.current?.abort();
+    setIsTyping(false);
+    setConversationId(null);
+    setChatError(null);
     setMessages([]);
     setInput('');
     setAttachedFile(null);
@@ -752,20 +625,14 @@ export default function Chat() {
   // Flowchart generation
   const handleGenerateFlowchart = async (content: string, messageIndex: number) => {
     try {
-      const response = await fetch('/api/generate-flowchart', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      });
-      if (!response.ok) throw new Error('Failed');
-      const data = await response.json();
+      const data = await api.generateFlowchart(content);
       setMessages(prev => prev.map((m, i) =>
-        i === messageIndex ? { ...m, hasDiagram: true, diagramCode: data.mermaidCode } : m
+        i === messageIndex ? { ...m, hasDiagram: true, diagramCode: data.mermaid } : m
       ));
-      setCurrentDiagram(data.mermaidCode);
+      setCurrentDiagram(data.mermaid);
       setShowDiagramModal(true);
-    } catch {
-      alert('Failed to generate flowchart. Please try again.');
+    } catch (err) {
+      alert(`Failed to generate flowchart. ${errorText(err)}`);
     }
   };
 
@@ -773,17 +640,11 @@ export default function Chat() {
   const handleGenerateReport = async (content: string) => {
     setIsGeneratingReport(true);
     try {
-      const response = await fetch('/api/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      });
-      if (!response.ok) throw new Error('Failed');
-      const data = await response.json();
-      setCurrentReport(data.report);
+      const data = await api.generateReport(content);
+      setCurrentReport(data.summary);
       setShowReportModal(true);
-    } catch {
-      alert('Failed to generate report. Please try again.');
+    } catch (err) {
+      alert(`Failed to generate report. ${errorText(err)}`);
     } finally {
       setIsGeneratingReport(false);
     }
@@ -792,32 +653,26 @@ export default function Chat() {
   // Quiz generation
   const handleGenerateQuiz = async (content: string) => {
     try {
-      const response = await fetch('/api/generate-quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      });
-
-      if (!response.ok) throw new Error('Failed to generate quiz');
-
-      const data = await response.json();
-      if (data.quiz && data.quiz.questions) {
-        setQuizData(data.quiz);
+      const data = await api.generateQuiz(content);
+      if (data.questions && data.questions.length > 0) {
+        setQuizData({ questions: data.questions });
         setCurrentQuestionIndex(0);
-        setSelectedAnswers(new Array(data.quiz.questions.length).fill(null));
+        setSelectedAnswers(new Array(data.questions.length).fill(null));
         setShowFeedback(false);
         setQuizScore(0);
         setQuizFinished(false);
         setShowQuizModal(true);
+      } else {
+        alert('No quiz questions could be generated from this message.');
       }
     } catch (error) {
       console.error('Quiz generation error:', error);
-      alert('Failed to generate quiz. Please try again.');
+      alert(`Failed to generate quiz. ${errorText(error)}`);
     }
   };
 
   const handleQuizAnswer = (answerIndex: number) => {
-    if (selectedAnswers[currentQuestionIndex] !== null) return; // Already answered
+    if (!quizData || selectedAnswers[currentQuestionIndex] !== null) return; // Already answered
 
     const newAnswers = [...selectedAnswers];
     newAnswers[currentQuestionIndex] = answerIndex;
@@ -825,13 +680,13 @@ export default function Chat() {
     setShowFeedback(true);
 
     // Update score if correct
-    if (answerIndex === quizData.questions[currentQuestionIndex].correctAnswer) {
+    if (answerIndex === quizData.questions[currentQuestionIndex].answer_index) {
       setQuizScore(prev => prev + 1);
     }
   };
 
   const handleNextQuestion = () => {
-    if (currentQuestionIndex < quizData.questions.length - 1) {
+    if (quizData && currentQuestionIndex < quizData.questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
       setShowFeedback(selectedAnswers[currentQuestionIndex + 1] !== null);
     }
@@ -845,16 +700,13 @@ export default function Chat() {
   };
 
   const handleFinishQuiz = () => {
+    if (!quizData) return;
     setQuizFinished(true);
-    const percentage = Math.round((quizScore / quizData.questions.length) * 100);
 
-    // Save quiz result to stats
-    addQuizResult({
-      subject: currentPersona || 'General',
-      topic: 'Quiz',
-      score: quizScore,
-      totalQuestions: quizData.questions.length,
-    });
+    // Persist the result server-side (stats page reads it back)
+    api
+      .postQuizResult({ score: quizScore, total: quizData.questions.length, subject: 'General' })
+      .catch((err) => console.error('Failed to save quiz result:', err));
   };
 
   const handleCloseQuiz = () => {
@@ -887,7 +739,7 @@ export default function Chat() {
           </span>
           <button
             className="kb-context-clear"
-            onClick={() => { setKbDocName(''); setDocumentContext(''); router.replace('/screens/chat'); }}
+            onClick={() => { setKbDocName(''); setDocumentId(null); router.replace('/screens/chat'); }}
             title="Clear document context"
           >
             <X size={14} weight="bold" />
@@ -923,46 +775,44 @@ export default function Chat() {
             <div className="sidebar-section">
               <h3 className="sidebar-section-title">RECENT CHATS</h3>
               <div className="sidebar-chat-list">
-                <button className="sidebar-chat-item" onClick={() => router.push('/screens/history')}>
-                  <ChatCircleDots size={20} />
-                  <span>Bio Notes: Mitosis</span>
-                </button>
-                <button className="sidebar-chat-item" onClick={() => router.push('/screens/history')}>
-                  <ChatCircleDots size={20} />
-                  <span>Organic Chem Formulas</span>
-                </button>
-                <button className="sidebar-chat-item" onClick={() => router.push('/screens/history')}>
-                  <ChatCircleDots size={20} />
-                  <span>Physics: Newton's Laws</span>
-                </button>
+                {recentChats.slice(0, 3).map((c) => (
+                  <button key={c.id} className="sidebar-chat-item" onClick={() => openConversation(c.id)}>
+                    <ChatCircleDots size={20} />
+                    <span>{c.title}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
             <div className="sidebar-section">
               <h3 className="sidebar-section-title">FAVORITES</h3>
               <div className="sidebar-chat-list">
-                {/* <button className="sidebar-chat-item favorite"><Star size={20} weight="fill" /><span>Bio Notes: Mitosis</span></button> */}
-                {/* <button className="sidebar-chat-item favorite"><Star size={20} weight="fill" /><span>Organic Chem Formulas</span></button> */}
+                {recentChats.filter((c) => c.is_favorite).slice(0, 5).map((c) => (
+                  <button key={c.id} className="sidebar-chat-item favorite" onClick={() => openConversation(c.id)}>
+                    <Star size={20} weight="fill" />
+                    <span>{c.title}</span>
+                  </button>
+                ))}
               </div>
             </div>
           </>
         )}
 
         <div className="sidebar-bottom">
-          <a href="/screens/knowledge-base" className="sidebar-btn" title="Knowledge Base">
+          <Link href="/screens/knowledge-base" className="sidebar-btn" title="Knowledge Base">
             <Books size={24} weight="bold" />
             {!sidebarCollapsed && <span className="sidebar-label">Knowledge Base</span>}
-          </a>
+          </Link>
 
           <button className="sidebar-btn" onClick={() => setNightMode(!nightMode)} title="Night Mode">
             <Moon size={24} weight={nightMode ? 'fill' : 'regular'} />
             {!sidebarCollapsed && <span className="sidebar-label">Night Mode</span>}
           </button>
 
-          <a href="/screens/history" className="sidebar-btn" title="History">
+          <Link href="/screens/history" className="sidebar-btn" title="History">
             <ClockCounterClockwise size={24} />
             {!sidebarCollapsed && <span className="sidebar-label">History</span>}
-          </a>
+          </Link>
           <button className="sidebar-btn" title="Memories">
             <Database size={24} />
             {!sidebarCollapsed && <span className="sidebar-label">Memories</span>}
@@ -1071,7 +921,7 @@ export default function Chat() {
                   <div className="quiz-options">
                     {quizData.questions[currentQuestionIndex].options.map((option: string, idx: number) => {
                       const isSelected = selectedAnswers[currentQuestionIndex] === idx;
-                      const isCorrect = idx === quizData.questions[currentQuestionIndex].correctAnswer;
+                      const isCorrect = idx === quizData.questions[currentQuestionIndex].answer_index;
                       const showResult = showFeedback && selectedAnswers[currentQuestionIndex] !== null;
 
                       let buttonClass = 'quiz-option-btn';
@@ -1096,9 +946,9 @@ export default function Chat() {
                     })}
                   </div>
                   {showFeedback && selectedAnswers[currentQuestionIndex] !== null && (
-                    <div className={`quiz-feedback ${selectedAnswers[currentQuestionIndex] === quizData.questions[currentQuestionIndex].correctAnswer ? 'correct' : 'incorrect'}`}>
+                    <div className={`quiz-feedback ${selectedAnswers[currentQuestionIndex] === quizData.questions[currentQuestionIndex].answer_index ? 'correct' : 'incorrect'}`}>
                       <div className="quiz-feedback-title">
-                        {selectedAnswers[currentQuestionIndex] === quizData.questions[currentQuestionIndex].correctAnswer ? '✓ Correct!' : '✗ Incorrect'}
+                        {selectedAnswers[currentQuestionIndex] === quizData.questions[currentQuestionIndex].answer_index ? '✓ Correct!' : '✗ Incorrect'}
                       </div>
                       <div className="quiz-feedback-text">
                         {quizData.questions[currentQuestionIndex].explanation}
@@ -1174,6 +1024,12 @@ export default function Chat() {
 
       {/* Main Area */}
       <div className="main-exact">
+        {chatError && (
+          <div role="alert" style={{ margin: '8px auto', padding: '10px 14px', maxWidth: 720, background: '#fee', border: '2px solid #c00', borderRadius: 8, color: '#c00', fontSize: 14, fontFamily: 'Sora, sans-serif', display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>{chatError}</span>
+            <button onClick={() => setChatError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c00' }} aria-label="Dismiss"><X size={14} weight="bold" /></button>
+          </div>
+        )}
         {messages.length === 0 ? (
           <div className="center-exact">
             <h1 className="greeting-exact">Hello! Ready to study?</h1>
@@ -1181,7 +1037,7 @@ export default function Chat() {
 
             <div className="search-container">
               <div className="search-input-wrapper">
-                <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,.pdf,.doc,.docx,.txt" onChange={handleFileChange} />
+                <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleFileChange} />
                 {attachedFile && (
                   <div className={`file-indicator ${imagePreviewUrl ? 'has-image' : ''}`}>
                     {imagePreviewUrl ? (
@@ -1193,13 +1049,13 @@ export default function Chat() {
                     <button className="file-remove-btn" onClick={handleRemoveFile} title="Remove file"><X size={14} weight="bold" /></button>
                   </div>
                 )}
-                <button className="search-mic-btn desktop-only" onClick={() => console.log('Voice input')} title="Voice input"><Microphone size={20} weight="bold" /></button>
+                <button className="search-mic-btn desktop-only" onClick={handleToggleMic} title="Voice input"><Microphone size={20} weight="bold" /></button>
                 <textarea
                   className="search-textarea desktop-only"
                   placeholder="Ask anything or upload a file..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && input.trim()) { e.preventDefault(); handleSubmit(e as any); } }}
+                  onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && input.trim()) { e.preventDefault(); handleSubmit(e); } }}
                   rows={1}
                 />
                 <div className="search-actions desktop-only">
@@ -1246,7 +1102,7 @@ export default function Chat() {
                         placeholder="Ask me anything..."
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        onKeyPress={(e) => { if (e.key === 'Enter' && input.trim()) { e.preventDefault(); handleSubmit(e as any); } }}
+                        onKeyPress={(e) => { if (e.key === 'Enter' && input.trim()) { e.preventDefault(); handleSubmit(e); } }}
                         style={{
                           width: '100%',
                           border: 'none',
@@ -1262,7 +1118,7 @@ export default function Chat() {
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {(input.trim() || attachedFile || isRecording || ocrProcessing) ? (
-                      <button className="mobile-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { handleSubmit(e as any); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
+                      <button className="mobile-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { handleSubmit(e); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
                         {ocrProcessing ? '⏳' : <ArrowRight size={18} weight="bold" color="#fff" />}
                       </button>
                     ) : (
@@ -1379,7 +1235,7 @@ export default function Chat() {
         {messages.length > 0 && (
           <div className="floating-input-area">
             <div className="floating-input-wrapper">
-              <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,.pdf,.doc,.docx,.txt" onChange={handleFileChange} />
+              <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleFileChange} />
               {attachedFile && (
                 <div className={`file-indicator ${imagePreviewUrl ? 'has-image' : ''}`}>
                   {imagePreviewUrl ? (
@@ -1399,7 +1255,7 @@ export default function Chat() {
                 placeholder="Ask anything..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && input.trim()) { e.preventDefault(); handleSubmit(e as any); } }}
+                onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && input.trim()) { e.preventDefault(); handleSubmit(e); } }}
                 rows={1}
               />
               <div className="floating-actions desktop-only">
@@ -1414,7 +1270,7 @@ export default function Chat() {
                     <span>{elapsedMinutes < 60 ? `${elapsedMinutes}min` : `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}min`}</span>
                   </div>
                 </div>
-                <button className="floating-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { if (input.trim() || attachedFile) handleSubmit(e as any); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
+                <button className="floating-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { if (input.trim() || attachedFile) handleSubmit(e); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
                   {ocrProcessing ? '⏳' : <ArrowRight size={20} weight="bold" />}
                 </button>
               </div>
@@ -1448,7 +1304,7 @@ export default function Chat() {
                       placeholder="Ask me anything..."
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      onKeyPress={(e) => { if (e.key === 'Enter' && input.trim()) { e.preventDefault(); handleSubmit(e as any); } }}
+                      onKeyPress={(e) => { if (e.key === 'Enter' && input.trim()) { e.preventDefault(); handleSubmit(e); } }}
                       style={{
                         width: '100%',
                         border: 'none',
@@ -1464,7 +1320,7 @@ export default function Chat() {
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {(input.trim() || attachedFile || isRecording || ocrProcessing) ? (
-                    <button className="mobile-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { handleSubmit(e as any); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
+                    <button className="mobile-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { handleSubmit(e); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
                       {ocrProcessing ? '⏳' : <ArrowRight size={18} weight="bold" color="#fff" />}
                     </button>
                   ) : (
@@ -1503,5 +1359,13 @@ export default function Chat() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <ProtectedRoute>
+      <Chat />
+    </ProtectedRoute>
   );
 }

@@ -45,6 +45,7 @@ export class SessionTimerImpl implements SessionTimer {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private isValidStoredData(data: any): data is SessionTimerStorage {
     return (
       data &&

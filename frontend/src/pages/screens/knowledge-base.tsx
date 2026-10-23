@@ -1,118 +1,109 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { UploadSimple, File, FileText, FilePdf, Link as LinkIcon, DotsThree, Trash, ChatCircle, FunnelSimple } from 'phosphor-react';
+import { UploadSimple, FileText, FilePdf, Link as LinkIcon, Trash, ChatCircle, FunnelSimple, Warning } from 'phosphor-react';
 import PillNav from '../../components/PillNav';
+import { ProtectedRoute } from '../../components/ProtectedRoute';
+import { api, ApiError, type DocumentRecord } from '../../lib/apiClient';
 
-interface Document {
-    id: string;
-    name: string;
-    type: 'pdf' | 'doc' | 'url';
-    size?: string;
-    addedDate: string;
-    status: 'ready' | 'processing' | 'indexed';
-    url?: string;
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const ALLOWED_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
+const POLL_INTERVAL_MS = 3000;
+
+function messageOf(err: unknown, fallback: string): string {
+    if (err instanceof ApiError) {
+        return err.status === 429 && err.retryAfter ? `${err.message} (retry in ${err.retryAfter}s)` : err.message;
+    }
+    return fallback;
 }
 
-export default function KnowledgeBase() {
-    const router = useRouter();
-    const [documents, setDocuments] = useState<Document[]>([
-        {
-            id: '1',
-            name: 'Molecular Biology of the Cell',
-            type: 'pdf',
-            size: '12.4 MB',
-            addedDate: 'Oct 24, 2023',
-            status: 'ready',
-        },
-        {
-            id: '2',
-            name: 'Intro to Macroeconomics - Chapter 4',
-            type: 'doc',
-            size: '3.1 MB',
-            addedDate: '2 mins ago',
-            status: 'processing',
-        },
-        {
-            id: '3',
-            name: 'Artificial Intelligence: A Modern Approach',
-            type: 'pdf',
-            size: '45.2 MB',
-            addedDate: 'Oct 20, 2023',
-            status: 'ready',
-        },
-        {
-            id: '4',
-            name: 'https://openstax.org/details/psychology',
-            type: 'url',
-            addedDate: 'Oct 18, 2023',
-            status: 'indexed',
-            url: 'https://openstax.org/details/psychology',
-        },
-    ]);
+function formatDate(iso?: string): string {
+    if (!iso) return 'Just now';
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? 'Just now' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
-    const [urlInput, setUrlInput] = useState('');
+function docKind(name: string): 'pdf' | 'image' {
+    return name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image';
+}
+
+function KnowledgeBase() {
+    const router = useRouter();
+    const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
     const [showDropzone, setShowDropzone] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const refresh = useCallback(async () => {
+        try {
+            const resp = await api.listDocuments();
+            setDocuments(resp.items);
+        } catch (err) {
+            setError(messageOf(err, 'Could not load your documents.'));
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        refresh();
+    }, [refresh]);
+
+    // Poll while anything is still being processed
+    const hasProcessing = documents.some((d) => d.status === 'processing');
+    useEffect(() => {
+        if (!hasProcessing) return;
+        const timer = setInterval(refresh, POLL_INTERVAL_MS);
+        return () => clearInterval(timer);
+    }, [hasProcessing, refresh]);
+
+    const uploadFiles = async (files: File[]) => {
+        setError(null);
+        setUploading(true);
+        try {
+            for (const file of files) {
+                if (!ALLOWED_TYPES.includes(file.type)) {
+                    setError(`"${file.name}" is not supported. Upload a PDF, PNG or JPG.`);
+                    continue;
+                }
+                if (file.size > MAX_UPLOAD_BYTES) {
+                    setError(`"${file.name}" is larger than 10 MB.`);
+                    continue;
+                }
+                try {
+                    const doc = await api.uploadDocument(file);
+                    setDocuments((prev) => [{ ...doc, created_at: doc.created_at ?? new Date().toISOString() }, ...prev.filter((d) => d.id !== doc.id)]);
+                } catch (err) {
+                    setError(messageOf(err, `Could not upload "${file.name}".`));
+                }
+            }
+        } finally {
+            setUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (files) {
-            Array.from(files).forEach((file) => {
-                const newDoc: Document = {
-                    id: Date.now().toString() + Math.random(),
-                    name: file.name,
-                    type: file.type.includes('pdf') ? 'pdf' : 'doc',
-                    size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-                    addedDate: 'Just now',
-                    status: 'processing',
-                };
-                setDocuments((prev) => [newDoc, ...prev]);
-
-                // Simulate processing
-                setTimeout(() => {
-                    setDocuments((prev) =>
-                        prev.map((doc) =>
-                            doc.id === newDoc.id ? { ...doc, status: 'ready' } : doc
-                        )
-                    );
-                }, 3000);
-            });
-        }
+        if (e.target.files) uploadFiles(Array.from(e.target.files));
     };
 
-    const handleAddUrl = () => {
-        if (urlInput.trim()) {
-            const newDoc: Document = {
-                id: Date.now().toString(),
-                name: urlInput,
-                type: 'url',
-                addedDate: 'Just now',
-                status: 'processing',
-                url: urlInput,
-            };
-            setDocuments((prev) => [newDoc, ...prev]);
-            setUrlInput('');
-
-            // Simulate processing
-            setTimeout(() => {
-                setDocuments((prev) =>
-                    prev.map((doc) =>
-                        doc.id === newDoc.id ? { ...doc, status: 'indexed' } : doc
-                    )
-                );
-            }, 2000);
-        }
-    };
-
-    const handleDeleteDocument = (id: string) => {
+    const handleDeleteDocument = async (id: string) => {
+        const previous = documents;
         setDocuments((prev) => prev.filter((doc) => doc.id !== id));
+        try {
+            await api.deleteDocument(id);
+        } catch (err) {
+            setDocuments(previous);
+            setError(messageOf(err, 'Could not delete the document.'));
+        }
     };
 
-    // Navigate to chat and pass the document name as context
-    const handleChatWithDocument = (doc: Document) => {
+    // Navigate to chat and pass the document as context
+    const handleChatWithDocument = (doc: DocumentRecord) => {
         router.push({
             pathname: '/screens/chat',
-            query: { docId: doc.id, docName: doc.name, docType: doc.type },
+            query: { docId: doc.id, docName: doc.name },
         });
     };
 
@@ -129,41 +120,11 @@ export default function KnowledgeBase() {
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setShowDropzone(false);
-
-        const files = e.dataTransfer.files;
-        if (files) {
-            Array.from(files).forEach((file) => {
-                const newDoc: Document = {
-                    id: Date.now().toString() + Math.random(),
-                    name: file.name,
-                    type: file.type.includes('pdf') ? 'pdf' : 'doc',
-                    size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-                    addedDate: 'Just now',
-                    status: 'processing',
-                };
-                setDocuments((prev) => [newDoc, ...prev]);
-
-                setTimeout(() => {
-                    setDocuments((prev) =>
-                        prev.map((doc) =>
-                            doc.id === newDoc.id ? { ...doc, status: 'ready' } : doc
-                        )
-                    );
-                }, 3000);
-            });
-        }
+        if (e.dataTransfer.files) uploadFiles(Array.from(e.dataTransfer.files));
     };
 
-    const getFileIcon = (type: string) => {
-        switch (type) {
-            case 'pdf':
-                return <FilePdf size={24} weight="fill" />;
-            case 'url':
-                return <LinkIcon size={24} weight="bold" />;
-            default:
-                return <FileText size={24} weight="fill" />;
-        }
-    };
+    const getFileIcon = (name: string) =>
+        docKind(name) === 'pdf' ? <FilePdf size={24} weight="fill" /> : <FileText size={24} weight="fill" />;
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -171,8 +132,8 @@ export default function KnowledgeBase() {
                 return <span className="status-badge ready">● Ready</span>;
             case 'processing':
                 return <span className="status-badge processing">● Processing...</span>;
-            case 'indexed':
-                return <span className="status-badge indexed">● Indexed</span>;
+            case 'failed':
+                return <span className="status-badge" style={{ color: '#c00' }}>● Failed</span>;
             default:
                 return null;
         }
@@ -204,28 +165,29 @@ export default function KnowledgeBase() {
                     </div>
                     <h3 className="kb-upload-title">Drag & Drop textbooks here</h3>
                     <p className="kb-upload-desc">
-                        PDF, EPUB or Word documents (Max 50MB per file)
+                        PDF, PNG or JPG (Max 10MB per file)
                     </p>
                     <div className="kb-upload-actions">
                         <input
                             type="file"
                             ref={fileInputRef}
                             style={{ display: 'none' }}
-                            accept=".pdf,.epub,.doc,.docx"
+                            accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
                             multiple
                             onChange={handleFileUpload}
                         />
                         <button
                             className="kb-btn-primary"
                             onClick={() => fileInputRef.current?.click()}
+                            disabled={uploading}
                         >
-                            Browse Files
+                            {uploading ? 'Uploading...' : 'Browse Files'}
                         </button>
                         <button className="kb-btn-secondary">View Tutorials</button>
                     </div>
                 </div>
 
-                {/* Add from URL */}
+                {/* Add from URL (not available yet) */}
                 <div className="kb-url-section">
                     <h4 className="kb-url-label">ADD FROM URL</h4>
                     <div className="kb-url-input-wrapper">
@@ -233,20 +195,21 @@ export default function KnowledgeBase() {
                         <input
                             type="text"
                             className="kb-url-input"
-                            placeholder="Paste a link to a PDF or textbook website..."
-                            value={urlInput}
-                            onChange={(e) => setUrlInput(e.target.value)}
-                            onKeyPress={(e) => {
-                                if (e.key === 'Enter' && urlInput.trim()) {
-                                    handleAddUrl();
-                                }
-                            }}
+                            placeholder="Link import is coming soon"
+                            disabled
                         />
-                        <button className="kb-url-btn" onClick={handleAddUrl}>
+                        <button className="kb-url-btn" disabled>
                             Add Link
                         </button>
                     </div>
                 </div>
+
+                {error && (
+                    <div className="history-error-banner" role="alert" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '12px 0', color: '#c00' }}>
+                        <Warning size={18} weight="fill" />
+                        <span>{error}</span>
+                    </div>
+                )}
 
                 {/* Recent Documents */}
                 <div className="kb-documents-section">
@@ -261,28 +224,18 @@ export default function KnowledgeBase() {
                     </div>
 
                     <div className="kb-documents-list">
+                        {loading && <p>Loading your documents...</p>}
+                        {!loading && documents.length === 0 && <p>No documents yet. Upload a textbook or notes to get started.</p>}
                         {documents.map((doc) => (
                             <div key={doc.id} className="kb-document-card">
-                                <div className="kb-doc-icon">{getFileIcon(doc.type)}</div>
+                                <div className="kb-doc-icon">{getFileIcon(doc.name)}</div>
                                 <div className="kb-doc-content">
                                     <div className="kb-doc-header">
                                         <h3 className="kb-doc-name">{doc.name}</h3>
                                         {getStatusBadge(doc.status)}
                                     </div>
                                     <div className="kb-doc-meta">
-                                        <span>Added {doc.addedDate}</span>
-                                        {doc.size && (
-                                            <>
-                                                <span className="kb-doc-separator">•</span>
-                                                <span>{doc.size}</span>
-                                            </>
-                                        )}
-                                        {doc.type === 'url' && (
-                                            <>
-                                                <span className="kb-doc-separator">•</span>
-                                                <span>URL Reference</span>
-                                            </>
-                                        )}
+                                        <span>Added {formatDate(doc.created_at)}</span>
                                     </div>
                                     {doc.status === 'processing' && (
                                         <div className="kb-progress-bar">
@@ -291,7 +244,7 @@ export default function KnowledgeBase() {
                                     )}
                                 </div>
                                 <div className="kb-doc-actions">
-                                    {doc.status === 'ready' || doc.status === 'indexed' ? (
+                                    {doc.status === 'ready' ? (
                                         <button
                                             className="kb-doc-btn-primary"
                                             onClick={() => handleChatWithDocument(doc)}
@@ -301,7 +254,7 @@ export default function KnowledgeBase() {
                                         </button>
                                     ) : (
                                         <button className="kb-doc-btn-disabled" disabled>
-                                            <span className="kb-indexing-text">Indexing</span>
+                                            <span className="kb-indexing-text">{doc.status === 'failed' ? 'Failed' : 'Indexing'}</span>
                                         </button>
                                     )}
                                     <button
@@ -316,12 +269,16 @@ export default function KnowledgeBase() {
                         ))}
                     </div>
 
-                    <button className="kb-view-all-btn">
-                        View all documents
-                        <span className="kb-view-all-arrow">↓</span>
-                    </button>
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function KnowledgeBasePage() {
+    return (
+        <ProtectedRoute>
+            <KnowledgeBase />
+        </ProtectedRoute>
     );
 }

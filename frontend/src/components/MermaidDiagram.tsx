@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 
 interface MermaidDiagramProps {
@@ -10,12 +10,13 @@ import { MagnifyingGlassPlus, MagnifyingGlassMinus, ArrowsOutSimple } from "phos
 
 export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
   const mermaidRef = useRef<HTMLDivElement>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     mermaid.initialize({
       startOnLoad: false,
       theme: 'default',
-      securityLevel: 'loose',
+      securityLevel: 'strict',
       fontFamily: 'Sora, sans-serif',
     });
   }, []);
@@ -28,15 +29,18 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
 
       try {
         const id = `mermaid-chart-${Math.random().toString(36).substring(2, 9)}`;
+        // securityLevel 'strict' makes mermaid sanitise the generated SVG.
         const { svg } = await mermaid.render(id, chart);
 
         if (isMounted && mermaidRef.current) {
+          setFailed(false);
           mermaidRef.current.innerHTML = svg;
         }
       } catch (error) {
         console.error('Mermaid render error:', error);
-        if (isMounted && mermaidRef.current) {
-          mermaidRef.current.innerHTML = `<div style="color:#ef4444; padding:10px; border:1px solid #ef4444; border-radius:8px; margin-bottom:10px;"><b>Flowchart Error:</b> Could not render the generated chart. Try generating it again!</div><pre style="white-space:pre-wrap; font-size:12px; opacity:0.7;">${chart}</pre>`;
+        if (isMounted) {
+          if (mermaidRef.current) mermaidRef.current.textContent = '';
+          setFailed(true);
         }
       }
     };
@@ -68,7 +72,17 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
               </button>
             </div>
             <TransformComponent wrapperStyle={{ width: '100%', height: '100%', minHeight: '400px' }}>
-              <div ref={mermaidRef} className="mermaid" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }} />
+              <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
+                {failed && (
+                  <>
+                    <div style={{ color: '#ef4444', padding: '10px', border: '1px solid #ef4444', borderRadius: '8px', marginBottom: '10px' }}>
+                      <b>Flowchart Error:</b> Could not render the generated chart. Try generating it again!
+                    </div>
+                    <pre style={{ whiteSpace: 'pre-wrap', fontSize: '12px', opacity: 0.7 }}>{chart}</pre>
+                  </>
+                )}
+                <div ref={mermaidRef} className="mermaid" style={{ width: '100%', display: failed ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center' }} />
+              </div>
             </TransformComponent>
           </>
         )}

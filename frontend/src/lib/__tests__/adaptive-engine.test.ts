@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { AdaptiveEngineImpl } from '../adaptive-engine';
 import { PersonaType } from '../../types/adaptive-persona';
 
@@ -117,26 +118,4 @@ describe('AdaptiveEngineImpl', () => {
       expect(AdaptiveEngineImpl.getExpectedPersona(45)).toBe('mentor');
     });
   });
-});
-
-// Mock localStorage for testing
-const localStorageMock = (() => {
-  let store: Record<string, string> = {};
-
-  return {
-    getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => {
-      store[key] = value.toString();
-    },
-    removeItem: (key: string) => {
-      delete store[key];
-    },
-    clear: () => {
-      store = {};
-    }
-  };
-})();
-
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock
 });

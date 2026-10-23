@@ -1,8 +1,38 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MagnifyingGlass, Trash, Clock, ChatCircle, Star, CaretDown, Warning, X } from 'phosphor-react';
 import PillNav from '../../components/PillNav';
-import { apiClient, HistoryItem } from '../../lib/api';
-import { useAuth } from '../../contexts/AuthContext';
+import { api, ApiError, type ConversationSummary } from '../../lib/apiClient';
+import { ProtectedRoute } from '../../components/ProtectedRoute';
+
+interface HistoryItem {
+  id: string;
+  title: string;
+  preview: string;
+  subject: string;
+  is_favorite: boolean;
+  timestamp: string;
+  date_bucket: 'today' | 'week' | 'month' | 'older';
+}
+
+function toHistoryItem(c: ConversationSummary): HistoryItem {
+  const when = new Date(c.updated_at);
+  const diffDays = (Date.now() - when.getTime()) / (1000 * 60 * 60 * 24);
+  const date_bucket: HistoryItem['date_bucket'] =
+    diffDays < 1 ? 'today' : diffDays < 7 ? 'week' : diffDays < 30 ? 'month' : 'older';
+  return {
+    id: c.id,
+    title: c.title || 'Chat Session',
+    preview: c.preview ?? '',
+    subject: c.subject || 'General',
+    is_favorite: c.is_favorite,
+    timestamp: Number.isNaN(when.getTime()) ? '' : when.toLocaleString(),
+    date_bucket,
+  };
+}
+
+function messageOf(err: unknown, fallback: string): string {
+  return err instanceof ApiError ? err.message : fallback;
+}
 
 type DateFilter = 'all' | 'favorites' | 'today' | 'week' | 'month';
 
@@ -54,8 +84,7 @@ function DeleteConfirmModal({
   );
 }
 
-export default function History() {
-  const { user } = useAuth();
+function History() {
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,23 +95,26 @@ export default function History() {
   const [deleteTarget, setDeleteTarget] = useState<HistoryItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Fetch real history from ChromaDB via backend
+  // Fetch conversation history from the API
   const fetchHistory = useCallback(async () => {
-    if (!user) {
-      setIsLoading(false);
-      return;
-    }
     setIsLoading(true);
     setError(null);
     try {
-      const resp = await apiClient.getChatHistory(100);
-      setItems(resp.items);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load history. Make sure the backend is running.');
+      const all: ConversationSummary[] = [];
+      let cursor: string | null = null;
+      for (let page = 0; page < 5; page++) {
+        const resp = await api.listConversations({ cursor, limit: 50 });
+        all.push(...resp.items);
+        cursor = resp.next_cursor;
+        if (!cursor) break;
+      }
+      setItems(all.map(toHistoryItem));
+    } catch (err) {
+      setError(messageOf(err, 'Failed to load history.'));
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     fetchHistory();
@@ -102,7 +134,7 @@ export default function History() {
     } else if (filter === 'week') {
       matchesFilter = item.date_bucket === 'today' || item.date_bucket === 'week';
     } else if (filter === 'month') {
-      matchesFilter = true;
+      matchesFilter = item.date_bucket !== 'older';
     }
 
     const matchesSubject = subjectFilter === 'all' || item.subject === subjectFilter;
@@ -115,10 +147,10 @@ export default function History() {
     setDeletingId(deleteTarget.id);
     setDeleteTarget(null);
     try {
-      await apiClient.deleteHistoryEntry(deleteTarget.id);
+      await api.deleteConversation(deleteTarget.id);
       setItems((prev) => prev.filter((i) => i.id !== deleteTarget.id));
-    } catch (err: any) {
-      setError(`Failed to delete: ${err.message}`);
+    } catch (err) {
+      setError(`Failed to delete: ${messageOf(err, 'please try again')}`);
     } finally {
       setDeletingId(null);
     }
@@ -129,7 +161,7 @@ export default function History() {
     const newFav = !item.is_favorite;
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, is_favorite: newFav } : i)));
     try {
-      await apiClient.toggleHistoryFavorite(item.id, newFav);
+      await api.updateConversation(item.id, { is_favorite: newFav });
     } catch {
       setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, is_favorite: !newFav } : i)));
     }
@@ -317,5 +349,13 @@ export default function History() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function HistoryPage() {
+  return (
+    <ProtectedRoute>
+      <History />
+    </ProtectedRoute>
   );
 }

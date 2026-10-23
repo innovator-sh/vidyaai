@@ -40,7 +40,7 @@ export interface UseAdaptivePersonaReturn {
   updateConfiguration: (config: Partial<AdaptivePersonaConfig>) => void;
   
   // Debugging/info
-  getSessionState: () => any;
+  getSessionState: () => unknown;
   isPersonaSwitchImminent: () => { imminent: boolean; nextPersona?: PersonaType; minutesUntil?: number };
   
   // Error handling

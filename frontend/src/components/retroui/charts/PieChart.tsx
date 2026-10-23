@@ -9,6 +9,7 @@ import {
 } from "recharts"
 
 interface PieChartProps extends React.HTMLAttributes<HTMLDivElement> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: Record<string, any>[]
   dataKey: string
   nameKey: string

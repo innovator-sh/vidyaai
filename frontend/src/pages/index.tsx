@@ -86,7 +86,7 @@ export default function Home() {
           <div className="problem-num">03</div>
           <div className="problem-title">Exam Ready</div>
           <div className="problem-desc">
-            Panic mode activated? We've got your weak spots mapped. Practice what matters, ace what counts.
+            Panic mode activated? We&apos;ve got your weak spots mapped. Practice what matters, ace what counts.
           </div>
         </div>
       </div>

@@ -40,6 +40,7 @@ export class AdaptiveEngineImpl implements AdaptiveEngine {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private isValidConfig(config: any): config is AdaptivePersonaConfig {
     return (
       config &&
