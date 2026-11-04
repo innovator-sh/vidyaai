@@ -184,3 +184,39 @@ class ConversationRepo:
                 if d is not None:
                     days.add(str(d)[:10])
         return days
+
+    async def user_message_times(self, user_id: uuid.UUID, since: datetime) -> list[datetime]:
+        res = await self.s.execute(
+            select(Message.created_at).where(
+                Message.user_id == user_id, Message.role == "user", Message.created_at >= since
+            )
+        )
+        return list(res.scalars().all())
+
+    async def conversation_subject_counts(
+        self, user_id: uuid.UUID, since: datetime
+    ) -> list[tuple[str | None, int]]:
+        """Conversations active since `since`, grouped by subject."""
+        res = await self.s.execute(
+            select(Conversation.subject, func.count())
+            .where(Conversation.user_id == user_id, Conversation.updated_at >= since)
+            .group_by(Conversation.subject)
+        )
+        return [(r[0], int(r[1])) for r in res.all()]
+
+    async def message_timeline(
+        self, user_id: uuid.UUID, since: datetime, limit: int = 50_000
+    ) -> list[tuple[uuid.UUID, str | None, datetime]]:
+        """(conversation_id, conversation subject, message time), ordered per conversation."""
+        res = await self.s.execute(
+            select(Message.conversation_id, Conversation.subject, Message.created_at)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(
+                Message.user_id == user_id,
+                Conversation.user_id == user_id,
+                Message.created_at >= since,
+            )
+            .order_by(Message.conversation_id, Message.created_at)
+            .limit(limit)
+        )
+        return [(r[0], r[1], r[2]) for r in res.all()]

@@ -14,7 +14,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.config import Settings, get_settings
 from app.errors import install_error_handlers
 from app.logging_config import configure_logging
-from app.middleware import BodyLimitMiddleware, RequestContextMiddleware
+from app.middleware import BodyLimitMiddleware, IPRateLimitMiddleware, RequestContextMiddleware
+from app.observability import init_sentry
 from app.routers import chat, conversations, documents, me, ops, stats, tools
 from app.services.container import build_services
 
@@ -29,6 +30,7 @@ def create_app(settings: Settings | None = None, **overrides: Any) -> FastAPI:
     settings = settings or get_settings()
     if settings.env != "test":
         configure_logging()
+    init_sentry(settings)
     services = build_services(settings, **overrides)
 
     @asynccontextmanager
@@ -58,6 +60,16 @@ def create_app(settings: Settings | None = None, **overrides: Any) -> FastAPI:
         max_json=settings.max_json_bytes,
         max_upload=settings.max_upload_bytes,
         upload_paths=UPLOAD_PATHS,
+    )
+    # Inside CORS (so 429s carry CORS headers and Retry-After is readable by the browser) and
+    # outside the body limiter: floods are throttled before anything else does work.
+    app.add_middleware(
+        IPRateLimitMiddleware,
+        limiter=services.limiter,
+        enabled=settings.rl_ip_enabled,
+        v1_per_min=settings.rl_ip_v1_per_min,
+        public_per_min=settings.rl_ip_public_per_min,
+        trusted_hops=settings.trusted_proxy_hops,
     )
     app.add_middleware(
         CORSMiddleware,

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
-from sqlalchemy import and_, delete, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Document, QuizResult
@@ -95,3 +96,24 @@ class QuizRepo:
             .limit(limit)
         )
         return res.scalars().all()
+
+    async def subject_counts(
+        self, user_id: uuid.UUID, since: datetime
+    ) -> list[tuple[str | None, int]]:
+        res = await self.s.execute(
+            select(QuizResult.subject, func.count())
+            .where(QuizResult.user_id == user_id, QuizResult.created_at >= since)
+            .group_by(QuizResult.subject)
+        )
+        return [(r[0], int(r[1])) for r in res.all()]
+
+    async def totals(self, user_id: uuid.UUID) -> tuple[int, int]:
+        """(sum of scores, sum of totals) over all of the user's quiz results."""
+        res = await self.s.execute(
+            select(
+                func.coalesce(func.sum(QuizResult.score), 0),
+                func.coalesce(func.sum(QuizResult.total), 0),
+            ).where(QuizResult.user_id == user_id)
+        )
+        score, total = res.one()
+        return int(score), int(total)

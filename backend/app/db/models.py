@@ -145,3 +145,15 @@ class UsageCounter(Base):
     bucket: Mapped[str] = mapped_column(String(32), primary_key=True)
     window_start: Mapped[datetime] = mapped_column(UTCDateTime, primary_key=True)
     count: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+
+
+class IpUsageCounter(Base):
+    """Fixed-window counters per client IP (SHA-256 of the address, never the address itself)."""
+
+    __tablename__ = "ip_usage_counters"
+    __table_args__ = (Index("ix_ip_usage_counters_window", "window_start"),)
+
+    ip_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    bucket: Mapped[str] = mapped_column(String(32), primary_key=True)
+    window_start: Mapped[datetime] = mapped_column(UTCDateTime, primary_key=True)
+    count: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
