@@ -104,7 +104,6 @@ jobs:
 
   audit:
     runs-on: ubuntu-latest
-    continue-on-error: true # advisory until known upstream-blocked findings are cleared
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -114,7 +113,8 @@ jobs:
         working-directory: frontend
         run: npm audit --omit=dev --audit-level=high
       - uses: astral-sh/setup-uv@v5
-      - name: pip-audit
+      - name: pip-audit (advisory)
+        continue-on-error: true
         working-directory: backend
         run: uvx pip-audit -r <(uv export --frozen --no-hashes --no-emit-project 2>/dev/null)
         shell: bash

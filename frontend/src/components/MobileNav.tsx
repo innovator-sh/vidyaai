@@ -1,16 +1,18 @@
 import { useRouter } from 'next/router';
-import { House, SquaresFour, ChartBar, User, Books } from 'phosphor-react';
+import { House, SquaresFour, User, Books } from 'phosphor-react';
+import { useTranslation } from 'react-i18next';
 
 export default function MobileNav() {
+  const { t } = useTranslation();
   const router = useRouter();
   const currentPath = router.pathname;
 
   const navItems = [
-    { icon: House, path: '/', label: 'Home' },
-    { icon: SquaresFour, path: '/screens/chat', label: 'Chat' },
-    { icon: Books, path: '/screens/knowledge-base', label: 'Knowledge' },
-    /* { icon: ChartBar, path: '/screens/stats', label: 'Stats' }, */
-    { icon: User, path: '/screens/account', label: 'Account' },
+    { icon: House, path: '/', label: t('nav.home') },
+    { icon: SquaresFour, path: '/screens/chat', label: t('nav.chat') },
+    { icon: Books, path: '/screens/knowledge-base', label: t('nav.knowledge') },
+    /* { icon: ChartBar, path: '/screens/stats', label: t('nav.stats') }, */
+    { icon: User, path: '/screens/account', label: t('nav.account') },
   ];
 
   return (

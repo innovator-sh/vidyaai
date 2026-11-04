@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Annotated, Any
+from urllib.parse import unquote, urlsplit
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, Response, UploadFile
 
@@ -9,8 +11,16 @@ from app.db.models import User
 from app.deps import CurrentUser, ServicesDep, SessionDep, rate_limit
 from app.errors import not_found
 from app.repositories.documents import DocumentRepo
-from app.schemas.api import DocumentOut, DocumentPage, DocumentUploadOut
+from app.schemas.api import DocumentFromUrlIn, DocumentOut, DocumentPage, DocumentUploadOut
 from app.services.ingest import ingest_document, sanitize_filename, validate_upload
+from app.services.urlfetch import (
+    HTML_TYPES,
+    PDF_TYPES,
+    Fetched,
+    decode_text,
+    fetch_url,
+    html_to_text,
+)
 from app.vector.store import DOC_CHUNKS
 
 router = APIRouter(prefix="/v1/documents", tags=["documents"])
@@ -34,6 +44,50 @@ async def upload_document(
         user.id, name=name, mime_type=mime, size_bytes=len(data)
     )
     # Bytes stay in memory; nothing is written to disk. Status flips to ready/failed later.
+    background.add_task(ingest_document, svc, user.id, doc.id, name, mime, data)
+    return doc
+
+
+def _url_name(fetched: Fetched, title: str) -> str:
+    if title:
+        return sanitize_filename(title)
+    parts = urlsplit(fetched.url)
+    last = unquote(parts.path.rstrip("/").rsplit("/", 1)[-1])
+    return sanitize_filename(last or parts.hostname or "web page")
+
+
+@router.post("/from-url", response_model=DocumentUploadOut, status_code=202)
+async def add_document_from_url(
+    body: DocumentFromUrlIn,
+    user: UploadUser,
+    session: SessionDep,
+    svc: ServicesDep,
+    background: BackgroundTasks,
+) -> Any:
+    """Fetch a public PDF / HTML / text page (SSRF-safe) and ingest it like an upload."""
+    s = svc.settings
+    fetched = await fetch_url(
+        body.url,
+        max_bytes=s.url_fetch_max_bytes,
+        timeout_seconds=s.url_fetch_timeout_seconds,
+        max_redirects=s.url_fetch_max_redirects,
+        resolver=svc.url_resolver,
+        transport_factory=svc.url_transport_factory,
+    )
+    title = ""
+    if fetched.content_type in PDF_TYPES:
+        mime, data = "application/pdf", fetched.data
+    else:
+        raw = decode_text(fetched.data, fetched.charset)
+        if fetched.content_type in HTML_TYPES:
+            text, title = await asyncio.to_thread(html_to_text, raw, s.doc_max_chars)
+        else:
+            text = raw[: s.doc_max_chars]
+        mime, data = "text/plain", text.encode()
+    name = _url_name(fetched, title)
+    doc = await DocumentRepo(session).create(
+        user.id, name=name, mime_type=mime, size_bytes=len(data)
+    )
     background.add_task(ingest_document, svc, user.id, doc.id, name, mime, data)
     return doc
 

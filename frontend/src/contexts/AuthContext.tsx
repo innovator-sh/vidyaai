@@ -20,6 +20,7 @@ import {
 } from 'firebase/auth';
 import { auth, createGoogleProvider } from '@/lib/firebase';
 import { api, ApiError } from '@/lib/apiClient';
+import i18n from '@/i18n';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -77,31 +78,35 @@ function mapUser(u: FirebaseUser): AppUser {
   };
 }
 
-const AUTH_MESSAGES: Record<string, string> = {
-  'auth/invalid-credential': 'Invalid email or password.',
-  'auth/invalid-email': 'Please enter a valid email address.',
-  'auth/user-not-found': 'Invalid email or password.',
-  'auth/wrong-password': 'Invalid email or password.',
-  'auth/email-already-in-use': 'An account with this email already exists.',
-  'auth/weak-password': 'Password is too weak. Use at least 6 characters.',
-  'auth/too-many-requests': 'Too many attempts. Please wait a bit and try again.',
-  'auth/network-request-failed': 'Network error. Please check your connection.',
-  'auth/popup-closed-by-user': 'Sign-in was cancelled.',
-  'auth/cancelled-popup-request': 'Sign-in was cancelled.',
-  'auth/popup-blocked': 'Your browser blocked the sign-in popup. Please allow popups and try again.',
-  'auth/user-disabled': 'This account has been disabled.',
+// Firebase error code -> translation key (resolved at throw time so it follows the active language).
+const AUTH_MESSAGE_KEYS: Record<string, string> = {
+  'auth/invalid-credential': 'authErrors.invalidCredential',
+  'auth/invalid-email': 'authErrors.invalidEmail',
+  'auth/user-not-found': 'authErrors.invalidCredential',
+  'auth/wrong-password': 'authErrors.invalidCredential',
+  'auth/email-already-in-use': 'authErrors.emailInUse',
+  'auth/weak-password': 'authErrors.weakPassword',
+  'auth/too-many-requests': 'authErrors.tooManyRequests',
+  'auth/network-request-failed': 'authErrors.network',
+  'auth/popup-closed-by-user': 'authErrors.popupClosed',
+  'auth/cancelled-popup-request': 'authErrors.popupClosed',
+  'auth/popup-blocked': 'authErrors.popupBlocked',
+  'auth/user-disabled': 'authErrors.userDisabled',
 };
 
+/** Marks errors we raised ourselves (already localised) so they pass through `friendlyAuthError`. */
+class LocalizedAuthError extends Error {}
+
 function friendlyAuthError(err: unknown): Error {
+  if (err instanceof LocalizedAuthError) return err;
   const code = (err as { code?: string })?.code;
-  if (code && AUTH_MESSAGES[code]) return new Error(AUTH_MESSAGES[code]);
-  if (err instanceof Error && !code) return err;
-  return new Error('Something went wrong. Please try again.');
+  if (code && AUTH_MESSAGE_KEYS[code]) return new Error(i18n.t(AUTH_MESSAGE_KEYS[code]));
+  return new Error(i18n.t('authErrors.generic'));
 }
 
 function requireAuth() {
   if (!auth) {
-    throw new Error('Authentication is not configured for this deployment.');
+    throw new LocalizedAuthError(i18n.t('authErrors.notConfigured'));
   }
   return auth;
 }
@@ -248,7 +253,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const resendVerificationEmail = useCallback(async () => {
     try {
       const u = requireAuth().currentUser;
-      if (!u) throw new Error('You are not signed in.');
+      if (!u) throw new LocalizedAuthError(i18n.t('authErrors.notSignedIn'));
       await sendEmailVerification(u);
     } catch (err) {
       throw friendlyAuthError(err);

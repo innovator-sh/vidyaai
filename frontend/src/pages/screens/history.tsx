@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MagnifyingGlass, Trash, Clock, ChatCircle, Star, CaretDown, Warning, X } from 'phosphor-react';
 import PillNav from '../../components/PillNav';
-import { api, ApiError, type ConversationSummary } from '../../lib/apiClient';
+import { useTranslation } from 'react-i18next';
+import { api, type ConversationSummary } from '../../lib/apiClient';
+import { errorMessage } from '../../lib/errors';
+import { subjectLabel } from '../../lib/stats-view';
+import i18n, { localeFor } from '../../i18n';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 
 interface HistoryItem {
@@ -10,7 +14,7 @@ interface HistoryItem {
   preview: string;
   subject: string;
   is_favorite: boolean;
-  timestamp: string;
+  updatedAt: Date | null;
   date_bucket: 'today' | 'week' | 'month' | 'older';
 }
 
@@ -21,21 +25,18 @@ function toHistoryItem(c: ConversationSummary): HistoryItem {
     diffDays < 1 ? 'today' : diffDays < 7 ? 'week' : diffDays < 30 ? 'month' : 'older';
   return {
     id: c.id,
-    title: c.title || 'Chat Session',
+    title: c.title,
     preview: c.preview ?? '',
     subject: c.subject || 'General',
     is_favorite: c.is_favorite,
-    timestamp: Number.isNaN(when.getTime()) ? '' : when.toLocaleString(),
+    updatedAt: Number.isNaN(when.getTime()) ? null : when,
     date_bucket,
   };
 }
 
-function messageOf(err: unknown, fallback: string): string {
-  return err instanceof ApiError ? err.message : fallback;
-}
-
 type DateFilter = 'all' | 'favorites' | 'today' | 'week' | 'month';
 
+// Values are the English subject names the API stores; labels are localised at render time.
 const subjects = [
   'All Subjects',
   'Mathematics',
@@ -59,24 +60,25 @@ function DeleteConfirmModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <Warning size={32} weight="fill" color="#e53935" />
-          <h2 className="modal-title">Delete this chat?</h2>
+          <h2 className="modal-title">{t('history.deleteTitle')}</h2>
         </div>
         <p className="modal-text">
-          &ldquo;{item.title}&rdquo; will be permanently removed from your history. This cannot be undone.
+          {t('history.deleteBody', { title: item.title })}
         </p>
         <div className="modal-actions">
           <button className="modal-btn cancel" onClick={onCancel}>
             <X size={16} weight="bold" />
-            Cancel
+            {t('common.cancel')}
           </button>
           <button className="modal-btn delete" onClick={onConfirm}>
             <Trash size={16} weight="bold" />
-            Delete
+            {t('common.delete')}
           </button>
         </div>
       </div>
@@ -85,6 +87,8 @@ function DeleteConfirmModal({
 }
 
 function History() {
+  const { t, i18n: i18nInstance } = useTranslation();
+  const locale = localeFor(i18nInstance.resolvedLanguage || i18nInstance.language);
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +114,7 @@ function History() {
       }
       setItems(all.map(toHistoryItem));
     } catch (err) {
-      setError(messageOf(err, 'Failed to load history.'));
+      setError(errorMessage(err, i18n.t, 'history.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -150,7 +154,7 @@ function History() {
       await api.deleteConversation(deleteTarget.id);
       setItems((prev) => prev.filter((i) => i.id !== deleteTarget.id));
     } catch (err) {
-      setError(`Failed to delete: ${messageOf(err, 'please try again')}`);
+      setError(i18n.t('history.deleteFailed', { reason: errorMessage(err, i18n.t, 'history.tryAgain') }));
     } finally {
       setDeletingId(null);
     }
@@ -174,7 +178,7 @@ function History() {
       {/* Delete confirmation modal */}
       {deleteTarget && (
         <DeleteConfirmModal
-          item={deleteTarget}
+          item={{ ...deleteTarget, title: deleteTarget.title || t('history.untitled') }}
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteTarget(null)}
         />
@@ -183,8 +187,8 @@ function History() {
       <div className="history-content">
         {/* Header */}
         <div className="history-header">
-          <h1 className="history-title">Chat History</h1>
-          <p className="history-subtitle">Your conversation timeline</p>
+          <h1 className="history-title">{t('history.title')}</h1>
+          <p className="history-subtitle">{t('history.subtitle')}</p>
         </div>
 
         {/* Error banner */}
@@ -192,7 +196,7 @@ function History() {
           <div className="history-error-banner">
             <Warning size={18} weight="fill" />
             <span>{error}</span>
-            <button onClick={fetchHistory}>Retry</button>
+            <button onClick={fetchHistory}>{t('common.retry')}</button>
           </div>
         )}
 
@@ -202,7 +206,7 @@ function History() {
             <MagnifyingGlass size={20} weight="bold" />
             <input
               type="text"
-              placeholder="Search conversations..."
+              placeholder={t('history.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="history-search-input"
@@ -214,7 +218,7 @@ function History() {
               className="subject-filter-btn"
               onClick={() => setShowSubjectDropdown(!showSubjectDropdown)}
             >
-              <span>{subjectFilter === 'all' ? 'All Subjects' : subjectFilter}</span>
+              <span>{subjectLabel(t, subjectFilter === 'all' ? 'all' : subjectFilter)}</span>
               <CaretDown size={16} weight="bold" />
             </button>
             {showSubjectDropdown && (
@@ -232,7 +236,7 @@ function History() {
                       setShowSubjectDropdown(false);
                     }}
                   >
-                    {subject}
+                    {subjectLabel(t, subject === 'All Subjects' ? 'all' : subject)}
                   </button>
                 ))}
               </div>
@@ -246,32 +250,32 @@ function History() {
             className={`history-tab ${filter === 'all' ? 'active' : ''}`}
             onClick={() => setFilter('all')}
           >
-            All
+            {t('history.all')}
           </button>
           <button
             className={`history-tab ${filter === 'today' ? 'active' : ''}`}
             onClick={() => setFilter('today')}
           >
-            Today
+            {t('history.today')}
           </button>
           <button
             className={`history-tab ${filter === 'week' ? 'active' : ''}`}
             onClick={() => setFilter('week')}
           >
-            This Week
+            {t('history.week')}
           </button>
           <button
             className={`history-tab ${filter === 'month' ? 'active' : ''}`}
             onClick={() => setFilter('month')}
           >
-            This Month
+            {t('history.month')}
           </button>
           <button
             className={`history-tab ${filter === 'favorites' ? 'active' : ''}`}
             onClick={() => setFilter('favorites')}
           >
             <Star size={16} weight="fill" />
-            Favorites
+            {t('history.favorites')}
           </button>
         </div>
 
@@ -281,7 +285,7 @@ function History() {
             <div className="history-loading-dots">
               <span /><span /><span />
             </div>
-            <p>Loading your history…</p>
+            <p>{t('history.loading')}</p>
           </div>
         ) : (
           /* History Grid */
@@ -290,9 +294,7 @@ function History() {
               <div className="history-empty" style={{ gridColumn: '1 / -1' }}>
                 <ChatCircle size={64} weight="bold" />
                 <p>
-                  {items.length === 0
-                    ? 'No chats yet — start a conversation to build your history!'
-                    : 'No conversations match your filters.'}
+                  {items.length === 0 ? t('history.empty') : t('history.noMatch')}
                 </p>
               </div>
             ) : (
@@ -315,14 +317,14 @@ function History() {
                       <button
                         className={`history-card-action favorite ${item.is_favorite ? 'active' : ''}`}
                         onClick={() => toggleFavorite(item)}
-                        title={item.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+                        title={item.is_favorite ? t('history.removeFavorite') : t('history.addFavorite')}
                       >
                         <Star size={18} weight={item.is_favorite ? 'fill' : 'regular'} />
                       </button>
                       <button
                         className="history-card-action delete"
                         onClick={() => setDeleteTarget(item)}
-                        title="Delete conversation"
+                        title={t('history.deleteConversation')}
                         disabled={deletingId === item.id}
                       >
                         <Trash size={18} weight="bold" />
@@ -330,17 +332,17 @@ function History() {
                     </div>
                   </div>
 
-                  <div className="history-card-subject-badge">{item.subject}</div>
+                  <div className="history-card-subject-badge">{subjectLabel(t, item.subject)}</div>
 
-                  <h3 className="history-card-title">{item.title}</h3>
+                  <h3 className="history-card-title">{item.title || t('history.untitled')}</h3>
                   <p className="history-card-preview">{item.preview}</p>
 
                   <div className="history-card-footer">
                     <div className="history-card-time">
                       <Clock size={14} weight="bold" />
-                      <span>{item.timestamp}</span>
+                      <span>{item.updatedAt ? item.updatedAt.toLocaleString(locale) : ''}</span>
                     </div>
-                    <div className="history-card-mode-label">Study Buddy</div>
+                    <div className="history-card-mode-label">{t('history.studyBuddy')}</div>
                   </div>
                 </div>
               ))

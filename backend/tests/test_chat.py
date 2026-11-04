@@ -140,6 +140,42 @@ async def test_untrusted_context_is_delimited_and_scoped(
     assert "untrusted_context" not in str(fakes.llm.stream_calls[-1][-1]["content"])
 
 
+async def test_chat_with_ready_document_retrieves_its_chunks(
+    client: httpx.AsyncClient, fakes: Fakes
+) -> None:
+    for name, ctype, data in (("n.pdf", "application/pdf", PDF),):
+        up = await client.post("/v1/documents", files={"file": (name, data, ctype)}, headers=auth())
+        doc_id = up.json()["id"]
+        assert (await client.get(f"/v1/documents/{doc_id}", headers=auth())).json()[
+            "status"
+        ] == "ready"
+        r, ev = await chat(client, "What do mitochondria produce? energy ATP", document_id=doc_id)
+        assert r.status_code == 200 and ev[-1][0] == "done"
+        sent = str(fakes.llm.stream_calls[-1][-1]["content"])
+        assert f'<untrusted_context source="document:{name}">' in sent and "ATP" in sent
+
+
+async def test_foreign_users_real_document_id_is_404_and_leaks_nothing(
+    client: httpx.AsyncClient, fakes: Fakes
+) -> None:
+    up = await client.post(
+        "/v1/documents", files={"file": ("bio.pdf", PDF, "application/pdf")}, headers=auth("alice")
+    )
+    doc_id = up.json()["id"]
+    assert (await client.get(f"/v1/documents/{doc_id}", headers=auth("alice"))).json()[
+        "status"
+    ] == "ready"
+    calls_before = len(fakes.llm.stream_calls)
+    r, _ = await chat(
+        client, "What do mitochondria produce? energy ATP", user="bob", document_id=doc_id
+    )
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
+    assert len(fakes.llm.stream_calls) == calls_before  # the model was never called
+    assert "ATP" not in r.text
+    convs = (await client.get("/v1/conversations", headers=auth("bob"))).json()["items"]
+    assert convs == []  # the rejected request left no conversation behind
+
+
 async def test_delimiter_cannot_be_closed_by_document_text(
     client: httpx.AsyncClient, fakes: Fakes
 ) -> None:

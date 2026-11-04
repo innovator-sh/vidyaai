@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/contexts/AuthContext';
+import { Trans, useTranslation } from 'react-i18next';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -24,6 +25,7 @@ const centered: React.CSSProperties = {
 };
 
 function VerifyEmailPrompt() {
+  const { t } = useTranslation();
   const { user, resendVerificationEmail, refreshUser, signOut } = useAuth();
   const router = useRouter();
   const [message, setMessage] = useState('');
@@ -36,7 +38,7 @@ function VerifyEmailPrompt() {
       await fn();
       setMessage(okMessage);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Something went wrong.');
+      setMessage(err instanceof Error ? err.message : t('verify.failed'));
     } finally {
       setBusy(false);
     }
@@ -54,17 +56,17 @@ function VerifyEmailPrompt() {
   return (
     <div style={centered}>
       <div style={{ maxWidth: 420, textAlign: 'center' }}>
-        <h2 style={{ marginBottom: 8 }}>Verify your email</h2>
+        <h2 style={{ marginBottom: 8 }}>{t('verify.title')}</h2>
         <p style={{ marginBottom: 16 }}>
-          We sent a verification link to <strong>{user?.email}</strong>. Open it, then come back and continue.
+          <Trans i18nKey="verify.body" values={{ email: user?.email ?? '' }} components={{ strong: <strong /> }} />
         </p>
         {message && <p style={{ marginBottom: 12, fontSize: 14 }}>{message}</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button style={btn} disabled={busy} onClick={() => run(refreshUser, 'Checked. If you verified, you will be let in shortly.')}>
-            I have verified
+          <button style={btn} disabled={busy} onClick={() => run(refreshUser, t('verify.checked'))}>
+            {t('verify.verified')}
           </button>
-          <button style={btn} disabled={busy} onClick={() => run(resendVerificationEmail, 'Verification email sent.')}>
-            Resend email
+          <button style={btn} disabled={busy} onClick={() => run(resendVerificationEmail, t('verify.sent'))}>
+            {t('verify.resend')}
           </button>
           <button
             style={btn}
@@ -74,7 +76,7 @@ function VerifyEmailPrompt() {
               router.replace('/auth');
             }}
           >
-            Sign out
+            {t('verify.signOut')}
           </button>
         </div>
       </div>
@@ -83,6 +85,7 @@ function VerifyEmailPrompt() {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const { t } = useTranslation();
   const { user, loading } = useAuth();
   const router = useRouter();
   const hasRedirected = useRef(false);
@@ -98,7 +101,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   if (loading) {
     return (
       <div style={centered}>
-        <div>Loading...</div>
+        <div>{t('common.loading')}</div>
       </div>
     );
   }

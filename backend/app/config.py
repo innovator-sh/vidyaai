@@ -69,6 +69,24 @@ class Settings(BaseSettings):
     rl_generate_per_min: int = 10
     daily_quota: int = 300
 
+    # --- rate limits (per client IP, shared through the database) ----------------------------
+    rl_ip_enabled: bool = True
+    rl_ip_v1_per_min: int = 120  # coarse pre-auth limiter on /v1/*
+    rl_ip_public_per_min: int = 30  # /readyz, docs, unknown paths (everything unauthenticated)
+    # Number of trusted reverse proxies in front of the app (Cloud Run = 1). The client IP is the
+    # entry that many positions from the RIGHT of X-Forwarded-For; anything to its left is
+    # client-controlled and ignored.
+    trusted_proxy_hops: int = Field(default=1, ge=0, le=10)
+
+    # --- add-from-URL fetcher ---------------------------------------------------------------
+    url_fetch_max_bytes: int = 10 * 1024 * 1024
+    url_fetch_timeout_seconds: float = 15.0  # whole fetch incl. DNS and redirects
+    url_fetch_max_redirects: int = 3
+
+    # --- observability (optional) -----------------------------------------------------------
+    sentry_dsn: SecretStr = SecretStr("")
+    sentry_traces_sample_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+
     @field_validator("cors_origins", "allowed_hosts", mode="before")
     @classmethod
     def _split_list(cls, v: object) -> object:

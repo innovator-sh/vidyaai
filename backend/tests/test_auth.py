@@ -23,6 +23,7 @@ V1_ROUTES = [
     ("DELETE", f"/v1/conversations/{ZERO}"),
     ("POST", "/v1/chat"),
     ("POST", "/v1/documents"),
+    ("POST", "/v1/documents/from-url"),
     ("GET", "/v1/documents"),
     ("GET", f"/v1/documents/{ZERO}"),
     ("DELETE", f"/v1/documents/{ZERO}"),

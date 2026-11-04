@@ -23,6 +23,7 @@ from app.providers.llm import GroqLLM, LLMProvider, UnconfiguredLLM
 from app.providers.ocr import CompositeOCR, GroqVisionMathOCR, OCRProvider, SarvamHandwritingOCR
 from app.providers.stt import SarvamSTT, STTProvider, UnconfiguredSTT
 from app.services.ratelimit import RateLimiter
+from app.services.urlfetch import Resolver, TransportFactory, system_resolver
 from app.vector.embeddings import Embedder, FastEmbedEmbedder
 from app.vector.store import VectorStore
 
@@ -49,6 +50,9 @@ class Services:
     verifier: TokenVerifier
     auth_admin: AuthAdmin
     limiter: RateLimiter
+    # "Add from URL" seams (tests inject a fake resolver / transport; no network in tests).
+    url_resolver: Resolver = system_resolver
+    url_transport_factory: TransportFactory | None = None
 
 
 def build_services(
@@ -62,6 +66,8 @@ def build_services(
     stt: STTProvider | None = None,
     verifier: TokenVerifier | None = None,
     auth_admin: AuthAdmin | None = None,
+    url_resolver: Resolver | None = None,
+    url_transport_factory: TransportFactory | None = None,
 ) -> Services:
     engine = engine or build_engine(settings)
     sm = build_sessionmaker(engine)
@@ -120,4 +126,6 @@ def build_services(
         verifier=verifier,
         auth_admin=auth_admin,
         limiter=RateLimiter(sm),
+        url_resolver=url_resolver or system_resolver,
+        url_transport_factory=url_transport_factory,
     )

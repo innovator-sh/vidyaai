@@ -116,10 +116,34 @@ export interface QuizResultRecord {
   created_at?: string;
 }
 
+export interface SubjectCount {
+  subject: string;
+  count: number;
+}
+
+export interface DailyActivity {
+  /** UTC day, `YYYY-MM-DD`. */
+  date: string;
+  messages: number;
+}
+
+export interface SubjectMinutes {
+  subject: string;
+  minutes: number;
+}
+
 export interface Stats {
   quiz_results: QuizResultRecord[];
   chat_count: number;
   streak_days: number;
+  // The fields below were added later; treat them as optional so older servers degrade gracefully.
+  /** Conversations per subject. */
+  by_subject?: SubjectCount[];
+  /** Messages per UTC day for the last 7 days (oldest first). */
+  weekly_activity?: DailyActivity[];
+  /** Overall quiz accuracy, 0..1, or null when no quizzes were taken. */
+  quiz_accuracy?: number | null;
+  study_minutes_by_subject?: SubjectMinutes[];
 }
 
 // ── Errors ─────────────────────────────────────────────────────────────────
@@ -390,6 +414,9 @@ export class ApiClient {
     else form.append('file', file);
     return this.json<DocumentRecord>('/v1/documents', { method: 'POST', form });
   };
+  /** Imports a web page / PDF by URL. Returns immediately with `status: "processing"`; poll for `ready`. */
+  createDocumentFromUrl = (url: string) =>
+    this.json<DocumentRecord>('/v1/documents/from-url', { method: 'POST', json: { url } });
   listDocuments = () => this.json<{ items: DocumentRecord[] }>('/v1/documents');
   getDocument = (id: string) => this.json<DocumentRecord>(`/v1/documents/${encodeURIComponent(id)}`);
   deleteDocument = (id: string) => this.json<void>(`/v1/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });

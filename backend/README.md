@@ -11,7 +11,8 @@ app/
   main.py            app factory:  uvicorn app.main:create_app --factory
   config.py          pydantic-settings (fails fast in ENV=prod when secrets are missing)
   deps.py            DB session, get_current_user (Firebase), rate_limit dependencies
-  middleware.py      request-id + security headers + JSON access log, body-size limit
+  middleware.py      request-id + security headers + JSON access log, body-size limit, per-IP limiter
+  observability.py   optional Sentry (SENTRY_DSN), scrubs PII/bodies/tokens before send
   db/                models (portable UUID/JSON types), engine (Neon URL normalisation)
   repositories/      every query filtered by user_id (foreign ids => 404)
   vector/store.py    the ONLY Qdrant caller; always injects the user_id filter
@@ -65,7 +66,16 @@ startup probe `/readyz`, secrets from Secret Manager (names in `../.env.example`
   Memory + root-cause analysis run as a background task after the stream.
 - Limits: DB-backed fixed-window counters (`usage_counters`) work across instances: chat 20/min,
   upload 5/min, OCR+STT 10/min, generate 10/min, plus a daily quota; `429` + `Retry-After`.
+  A second limiter (`ip_usage_counters`, keyed by SHA-256 of the client IP) runs before auth:
+  120/min/IP on `/v1/*`, 30/min/IP on everything else except `/healthz`. The IP is the
+  `TRUSTED_PROXY_HOPS`-th entry from the RIGHT of `X-Forwarded-For` (default 1 = Cloud Run), so a
+  client-supplied leftmost entry cannot spoof it. If the limiter's DB call fails it fails open.
 - Documents: PDF/PNG/JPEG only, <= 10 MB, MIME + magic-byte check, processed in memory, ingested in a
   BackgroundTask; `status` = processing | ready | failed (a queue can replace the task later).
+- Add from URL (`POST /v1/documents/from-url`): SSRF-safe fetch (public IPs only, pinned
+  connection, every redirect hop re-validated, 10 MB streamed cap, pdf/html/text only) feeding the
+  same ingest pipeline; see `services/urlfetch.py` and the contract.
+- Sentry: set `SENTRY_DSN` to enable (no-op otherwise); `send_default_pii=False`, bodies/headers/
+  cookies/emails/tokens stripped in `before_send`; `SENTRY_TRACES_SAMPLE_RATE` defaults to 0.
 - Account deletion removes Qdrant points, Postgres rows (cascade) and the Firebase user.
 - Logs are JSON, carry `request_id`/`user_id` only, never e-mail or message bodies.

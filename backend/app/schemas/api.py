@@ -100,6 +100,10 @@ class DocumentUploadOut(Out):
     status: str
 
 
+class DocumentFromUrlIn(Strict):
+    url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2048)]
+
+
 class DocumentOut(Out):
     id: uuid.UUID
     name: str
@@ -163,7 +167,26 @@ class QuizResultOut(Out):
     created_at: datetime
 
 
+class SubjectCount(BaseModel):
+    subject: str
+    count: int
+
+
+class DayActivity(BaseModel):
+    date: str  # ISO date, UTC
+    messages: int
+
+
+class SubjectMinutes(BaseModel):
+    subject: str
+    minutes: float
+
+
 class StatsOut(BaseModel):
     quiz_results: list[QuizResultOut]
     chat_count: int
     streak_days: int
+    by_subject: list[SubjectCount]
+    weekly_activity: list[DayActivity]
+    quiz_accuracy: float | None
+    study_minutes_by_subject: list[SubjectMinutes]

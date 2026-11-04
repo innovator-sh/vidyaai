@@ -15,6 +15,10 @@ interface BarChartProps extends React.HTMLAttributes<HTMLDivElement> {
   data: Record<string, any>[]
   index: string
   categories: string[]
+  /** Display name for the index (x) field in tooltips; defaults to the field name. */
+  indexLabel?: string
+  /** Display names for category fields in tooltips; defaults to the field names. */
+  categoryLabels?: Record<string, string>
   strokeColors?: string[]
   fillColors?: string[]
   tooltipBgColor?: string
@@ -34,6 +38,8 @@ const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(
       data = [],
       index,
       categories = [],
+      indexLabel,
+      categoryLabels,
       strokeColors = ["var(--foreground)"],
       fillColors = ["var(--primary)", "var(--secondary)"],
       tooltipBgColor = "var(--background)",
@@ -114,7 +120,7 @@ const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(
                       <div className="grid grid-cols-2 gap-2">
                         <div className="flex flex-col">
                           <span className="text-[0.70rem] uppercase text-muted-foreground">
-                            {index}
+                            {indexLabel ?? index}
                           </span>
                           <span className="font-bold text-muted-foreground">
                             {label}
@@ -123,7 +129,7 @@ const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(
                         {payload.map((entry, index) => (
                           <div key={index} className="flex flex-col">
                             <span className="text-[0.70rem] uppercase text-muted-foreground">
-                              {entry.dataKey}
+                              {categoryLabels?.[String(entry.dataKey)] ?? entry.dataKey}
                             </span>
                             <span className="font-bold" style={{ color: strokeColors[0] }}>
                               {valueFormatter(entry.value as number)}

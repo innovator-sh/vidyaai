@@ -147,7 +147,14 @@ def test_clean_mermaid() -> None:
 
 async def test_quiz_results_and_stats(client: httpx.AsyncClient) -> None:
     stats = (await client.get("/v1/stats", headers=auth())).json()
-    assert stats == {"quiz_results": [], "chat_count": 0, "streak_days": 0}
+    assert stats.pop("weekly_activity") and stats == {
+        "quiz_results": [],
+        "chat_count": 0,
+        "streak_days": 0,
+        "by_subject": [],
+        "quiz_accuracy": None,
+        "study_minutes_by_subject": [],
+    }
     r = await client.post(
         "/v1/quiz-results", json={"score": 4, "total": 5, "subject": "Bio"}, headers=auth()
     )
@@ -162,7 +169,8 @@ async def test_quiz_results_and_stats(client: httpx.AsyncClient) -> None:
     assert stats["streak_days"] == 1
     # isolation
     other = (await client.get("/v1/stats", headers=auth("bob"))).json()
-    assert other == {"quiz_results": [], "chat_count": 0, "streak_days": 0}
+    assert other["quiz_results"] == [] and other["chat_count"] == 0 and other["by_subject"] == []
+    assert other["quiz_accuracy"] is None
 
 
 async def test_quiz_result_validation(client: httpx.AsyncClient) -> None:

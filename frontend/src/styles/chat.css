@@ -2924,3 +2924,31 @@ textarea.desktop-only {
   box-shadow: 2px 2px 0 #000;
   margin-bottom: 8px;
 }
+/* ── Chat attachment chips (status for PDFs) ───────────────────────────── */
+.attachment-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.attachment-chip.failed .attachment-status {
+  color: #c00;
+}
+
+.attachment-chip.ready .attachment-status {
+  color: #16a34a;
+}
+
+.attachment-spinner {
+  animation: attachment-spin 0.9s linear infinite;
+}
+
+@keyframes attachment-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

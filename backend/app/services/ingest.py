@@ -78,6 +78,8 @@ async def ingest_document(
     try:
         if mime == "application/pdf":
             text = extract_pdf_text(data, s.pdf_max_pages, s.doc_max_chars)
+        elif mime == "text/plain":  # pages fetched from a URL, already reduced to plain text
+            text = data.decode("utf-8", errors="replace")[: s.doc_max_chars]
         else:
             text = (await svc.ocr.extract(data, mime, "handwriting"))[: s.doc_max_chars]
         chunks = chunk_text(text)[: s.doc_max_chunks]

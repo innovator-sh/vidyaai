@@ -1,5 +1,6 @@
 import React, { useRef, useState, useLayoutEffect } from 'react';
 import { FlowArrow, FileDoc, Exam, SpeakerHigh } from 'phosphor-react';
+import { useTranslation } from 'react-i18next';
 
 interface ActionMenuProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export default function ActionMenu({
   onGenerateQuiz,
   onToggleSpeech,
 }: ActionMenuProps) {
+  const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
   const [openUpwards, setOpenUpwards] = useState(false);
 
@@ -61,7 +63,7 @@ export default function ActionMenu({
           }}
         >
           <FlowArrow size={18} weight="bold" />
-          <span>Generate Flowchart</span>
+          <span>{t('chat.actions.flowchart')}</span>
         </button>
         <button
           className="action-menu-item"
@@ -72,7 +74,7 @@ export default function ActionMenu({
           disabled={isGeneratingReport}
         >
           <FileDoc size={18} weight="bold" />
-          <span>{isGeneratingReport ? 'Generating…' : 'Generate Report'}</span>
+          <span>{isGeneratingReport ? t('chat.actions.generating') : t('chat.actions.report')}</span>
         </button>
         <button
           className="action-menu-item"
@@ -82,7 +84,7 @@ export default function ActionMenu({
           }}
         >
           <Exam size={18} weight="bold" />
-          <span>Generate Quiz</span>
+          <span>{t('chat.actions.quiz')}</span>
         </button>
         <button
           className="action-menu-item"
@@ -92,7 +94,7 @@ export default function ActionMenu({
           }}
         >
           <SpeakerHigh size={18} weight={isSpeaking ? 'fill' : 'bold'} />
-          <span>{isSpeaking ? 'Stop Audio' : 'Read Aloud'}</span>
+          <span>{isSpeaking ? t('chat.actions.stopAudio') : t('chat.actions.readAloud')}</span>
         </button>
       </div>
     </>
