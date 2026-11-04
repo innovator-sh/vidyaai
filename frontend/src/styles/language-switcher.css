@@ -1,0 +1,91 @@
+.lang-switcher {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1001;
+  font-family: 'Sora', sans-serif;
+}
+
+.lang-switcher-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #000;
+  background: rgba(255, 255, 255, 0.95);
+  border: 3px solid #000;
+  border-radius: 50px;
+  box-shadow: 3px 3px 0 #000;
+  cursor: pointer;
+}
+
+.lang-switcher-btn:hover {
+  background: #ffe44d;
+}
+
+.lang-switcher-btn:focus-visible,
+.lang-switcher-option:focus-visible {
+  outline: 3px solid #5b7cff;
+  outline-offset: 2px;
+}
+
+.lang-switcher-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 140px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #fff;
+  border: 3px solid #000;
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 #000;
+}
+
+.lang-switcher-option {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+  color: #000;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.lang-switcher-option:hover {
+  background: #f1f1f1;
+}
+
+.lang-switcher-option.active {
+  background: #ffe44d;
+}
+
+@media (max-width: 768px) {
+  .lang-switcher {
+    top: 12px;
+    right: 12px;
+  }
+
+  .lang-switcher--shifted {
+    right: 64px;
+  }
+
+  .lang-switcher-btn {
+    padding: 6px 10px;
+    font-size: 13px;
+    border-width: 2px;
+    box-shadow: 2px 2px 0 #000;
+  }
+
+  .lang-switcher-menu {
+    border-width: 2px;
+    box-shadow: 3px 3px 0 #000;
+  }
+}

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { House, ChatCircle, ChartBar, User } from 'phosphor-react';
 import gsap from 'gsap';
+import { useTranslation } from 'react-i18next';
 
 interface NavItem {
   label: string;
@@ -10,6 +11,7 @@ interface NavItem {
 }
 
 export default function PillNav() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
   const indicatorRef = useRef<HTMLDivElement>(null);
@@ -17,10 +19,10 @@ export default function PillNav() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const navItems: NavItem[] = [
-    { label: 'Home', path: '/', icon: <House size={20} weight="bold" /> },
-    { label: 'Chat', path: '/screens/chat', icon: <ChatCircle size={20} weight="bold" /> },
+    { label: t('nav.home'), path: '/', icon: <House size={20} weight="bold" /> },
+    { label: t('nav.chat'), path: '/screens/chat', icon: <ChatCircle size={20} weight="bold" /> },
     // { label: 'Stats', path: '/screens/stats', icon: <ChartBar size={20} weight="bold" /> },
-    { label: 'Account', path: '/screens/account', icon: <User size={20} weight="bold" /> },
+    { label: t('nav.account'), path: '/screens/account', icon: <User size={20} weight="bold" /> },
   ];
 
   // Initial entrance animation

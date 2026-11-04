@@ -3,8 +3,10 @@ import { Eye, EyeSlash, ArrowRight, ArrowLeft } from 'phosphor-react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 export default function Register() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { signUp } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
@@ -54,7 +56,7 @@ export default function Register() {
         // Redirect to chat on successful registration
         router.push('/screens/chat');
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to create account. Please try again.');
+        setError(err instanceof Error ? err.message : t('register.createFailed'));
       } finally {
         setLoading(false);
       }
@@ -88,30 +90,26 @@ export default function Register() {
             <div className="register-progress-steps">
               <div className={`register-progress-step ${currentStep >= 1 ? 'active' : ''} ${currentStep > 1 ? 'completed' : ''}`}>
                 <div className="register-progress-circle">1</div>
-                <span className="register-progress-label">Personal</span>
+                <span className="register-progress-label">{t('register.stepPersonal')}</span>
               </div>
               <div className={`register-progress-line ${currentStep > 1 ? 'completed' : ''}`}></div>
               <div className={`register-progress-step ${currentStep >= 2 ? 'active' : ''} ${currentStep > 2 ? 'completed' : ''}`}>
                 <div className="register-progress-circle">2</div>
-                <span className="register-progress-label">Education</span>
+                <span className="register-progress-label">{t('register.stepEducation')}</span>
               </div>
               <div className={`register-progress-line ${currentStep > 2 ? 'completed' : ''}`}></div>
               <div className={`register-progress-step ${currentStep >= 3 ? 'active' : ''}`}>
                 <div className="register-progress-circle">3</div>
-                <span className="register-progress-label">Details</span>
+                <span className="register-progress-label">{t('register.stepDetails')}</span>
               </div>
             </div>
           </div>
 
           <h1 className="auth-title">
-            {currentStep === 1 && 'Personal Information'}
-            {currentStep === 2 && 'Education Details'}
-            {currentStep === 3 && 'College & Location'}
+            {t(`register.title${currentStep}`)}
           </h1>
           <p className="auth-subtitle">
-            {currentStep === 1 && 'Please enter your basic details'}
-            {currentStep === 2 && 'Tell us about your education'}
-            {currentStep === 3 && 'Where do you study?'}
+            {t(`register.subtitle${currentStep}`)}
           </p>
 
           {error && (
@@ -134,11 +132,11 @@ export default function Register() {
             {currentStep === 1 && (
               <>
                 <div className="auth-field">
-                  <label className="auth-field-label">Full Name</label>
+                  <label className="auth-field-label">{t('register.fullName')}</label>
                   <input
                     type="text"
                     className="auth-field-input"
-                    placeholder="Enter your full name"
+                    placeholder={t('register.fullNamePlaceholder')}
                     value={formData.fullname}
                     onChange={(e) => setFormData({ ...formData, fullname: e.target.value })}
                     required
@@ -146,11 +144,11 @@ export default function Register() {
                 </div>
 
                 <div className="auth-field">
-                  <label className="auth-field-label">Email</label>
+                  <label className="auth-field-label">{t('auth.emailLbl')}</label>
                   <input
                     type="email"
                     className="auth-field-input"
-                    placeholder="mail@domain.com"
+                    placeholder={t('auth.emailPlaceholder')}
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     required
@@ -158,12 +156,12 @@ export default function Register() {
                 </div>
 
                 <div className="auth-field">
-                  <label className="auth-field-label">Password</label>
+                  <label className="auth-field-label">{t('auth.passwordLbl')}</label>
                   <div className="auth-field-password">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       className="auth-field-input"
-                      placeholder="Create a password"
+                      placeholder={t('register.passwordPlaceholder')}
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       required
@@ -172,6 +170,7 @@ export default function Register() {
                       type="button"
                       className="auth-password-toggle-inline"
                       onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                     >
                       {showPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
                     </button>
@@ -184,11 +183,11 @@ export default function Register() {
             {currentStep === 2 && (
               <>
                 <div className="auth-field">
-                  <label className="auth-field-label">Course</label>
+                  <label className="auth-field-label">{t('register.course')}</label>
                   <input
                     type="text"
                     className="auth-field-input"
-                    placeholder="e.g., Computer Science"
+                    placeholder={t('register.coursePlaceholder')}
                     value={formData.course}
                     onChange={(e) => setFormData({ ...formData, course: e.target.value })}
                     required
@@ -196,19 +195,19 @@ export default function Register() {
                 </div>
 
                 <div className="auth-field">
-                  <label className="auth-field-label">Degree Level</label>
+                  <label className="auth-field-label">{t('register.degreeLevel')}</label>
                   <select
                     className="auth-field-input"
                     value={formData.degree}
                     onChange={(e) => setFormData({ ...formData, degree: e.target.value })}
                     required
                   >
-                    <option value="">Select degree level</option>
-                    <option value="bachelors">Bachelor&apos;s Degree</option>
-                    <option value="masters">Master&apos;s Degree</option>
-                    <option value="phd">PhD</option>
-                    <option value="diploma">Diploma</option>
-                    <option value="other">Other</option>
+                    <option value="">{t('register.degreePlaceholder')}</option>
+                    <option value="bachelors">{t('register.degreeBachelors')}</option>
+                    <option value="masters">{t('register.degreeMasters')}</option>
+                    <option value="phd">{t('register.degreePhd')}</option>
+                    <option value="diploma">{t('register.degreeDiploma')}</option>
+                    <option value="other">{t('register.degreeOther')}</option>
                   </select>
                 </div>
               </>
@@ -218,11 +217,11 @@ export default function Register() {
             {currentStep === 3 && (
               <>
                 <div className="auth-field">
-                  <label className="auth-field-label">College Name</label>
+                  <label className="auth-field-label">{t('register.college')}</label>
                   <input
                     type="text"
                     className="auth-field-input"
-                    placeholder="Enter your college name"
+                    placeholder={t('register.collegePlaceholder')}
                     value={formData.college}
                     onChange={(e) => setFormData({ ...formData, college: e.target.value })}
                     required
@@ -230,11 +229,11 @@ export default function Register() {
                 </div>
 
                 <div className="auth-field">
-                  <label className="auth-field-label">Location</label>
+                  <label className="auth-field-label">{t('register.location')}</label>
                   <input
                     type="text"
                     className="auth-field-input"
-                    placeholder="City, Country"
+                    placeholder={t('register.locationPlaceholder')}
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     required
@@ -247,7 +246,7 @@ export default function Register() {
               {currentStep > 1 && (
                 <button type="button" className="auth-back-btn" onClick={handleBack}>
                   <ArrowLeft size={18} weight="bold" />
-                  <span>Back</span>
+                  <span>{t('register.back')}</span>
                 </button>
               )}
               <button
@@ -255,7 +254,7 @@ export default function Register() {
                 className="auth-signin-btn"
                 disabled={!isStepValid() || loading}
               >
-                <span>{loading ? 'Processing...' : (currentStep === totalSteps ? 'Complete' : 'Next')}</span>
+                <span>{loading ? t('register.processing') : (currentStep === totalSteps ? t('register.complete') : t('register.next'))}</span>
                 <ArrowRight size={18} weight="bold" />
               </button>
             </div>
@@ -263,7 +262,7 @@ export default function Register() {
           </form>
 
           <p className="auth-register-text">
-            Already have an account? <Link href="/auth" className="auth-register-link">Login</Link>
+            {t('register.haveAccount')} <Link href="/auth" className="auth-register-link">{t('register.loginLink')}</Link>
           </p>
         </div>
       </div>
@@ -271,8 +270,8 @@ export default function Register() {
       {/* Right Side - Welcome Section */}
       <div className="auth-right">
         <div className="auth-welcome-content">
-          <h2 className="auth-welcome-title">Join our community!</h2>
-          <p className="auth-welcome-subtitle">Create your account now.</p>
+          <h2 className="auth-welcome-title">{t('register.joinTitle')}</h2>
+          <p className="auth-welcome-subtitle">{t('register.joinSub')}</p>
 
           {/* Placeholder for custom images/charts */}
           <div className="auth-visual-grid">

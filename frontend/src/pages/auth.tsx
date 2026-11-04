@@ -3,8 +3,10 @@ import { Eye, EyeSlash, ArrowRight } from 'phosphor-react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 export default function Auth() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { signIn, signInWithGoogle, sendPasswordReset } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +27,7 @@ export default function Auth() {
       await signIn(formData.email, formData.password);
       router.push('/screens/chat');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sign in. Please check your credentials.');
+      setError(err instanceof Error ? err.message : t('auth.signInFailed'));
     } finally {
       setLoading(false);
     }
@@ -39,7 +41,7 @@ export default function Auth() {
       await signInWithGoogle();
       router.push('/screens/chat');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google sign-in failed.');
+      setError(err instanceof Error ? err.message : t('auth.googleFailed'));
     } finally {
       setLoading(false);
     }
@@ -50,14 +52,14 @@ export default function Auth() {
     setError('');
     setInfo('');
     if (!formData.email) {
-      setError('Enter your email above, then click "Forgot password?".');
+      setError(t('auth.enterEmailFirst'));
       return;
     }
     try {
       await sendPasswordReset(formData.email);
-      setInfo('If an account exists for that email, a reset link is on its way.');
+      setInfo(t('auth.resetSent'));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send the reset email.');
+      setError(err instanceof Error ? err.message : t('auth.resetFailed'));
     }
   };
 
@@ -68,8 +70,8 @@ export default function Auth() {
       <div className="auth-left">
         <div className="auth-form-container">
 
-          <h1 className="auth-title">Login</h1>
-          <p className="auth-subtitle">Please enter your details</p>
+          <h1 className="auth-title">{t('auth.login')}</h1>
+          <p className="auth-subtitle">{t('auth.subtitle')}</p>
 
           {error && (
             <div style={{
@@ -103,11 +105,11 @@ export default function Auth() {
 
           <form onSubmit={handleSubmit} className="auth-form-split">
             <div className="auth-field">
-              <label className="auth-field-label">Email</label>
+              <label className="auth-field-label">{t('auth.emailLbl')}</label>
               <input
                 type="email"
                 className="auth-field-input"
-                placeholder="mail@domain.com"
+                placeholder={t('auth.emailPlaceholder')}
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
@@ -116,14 +118,14 @@ export default function Auth() {
 
             <div className="auth-field">
               <div className="auth-field-header">
-                <label className="auth-field-label">Password</label>
-                <a href="#" className="auth-forgot-link-inline" onClick={handleForgot}>Forgot password?</a>
+                <label className="auth-field-label">{t('auth.passwordLbl')}</label>
+                <a href="#" className="auth-forgot-link-inline" onClick={handleForgot}>{t('auth.forgotPwd')}</a>
               </div>
               <div className="auth-field-password">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   className="auth-field-input"
-                  placeholder="Password"
+                  placeholder={t('auth.passwordLbl')}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   required
@@ -132,6 +134,7 @@ export default function Auth() {
                   type="button"
                   className="auth-password-toggle-inline"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
                 </button>
@@ -139,19 +142,19 @@ export default function Auth() {
             </div>
 
             <button type="submit" className="auth-signin-btn" disabled={loading}>
-              <span>{loading ? 'Signing in...' : 'Sign In'}</span>
+              <span>{loading ? t('auth.signingIn') : t('auth.signIn')}</span>
               <ArrowRight size={18} weight="bold" />
             </button>
 
-            <div className="auth-divider-split"><span>or</span></div>
+            <div className="auth-divider-split"><span>{t('auth.or')}</span></div>
 
             <button type="button" className="auth-social-btn-split google" onClick={handleGoogle} disabled={loading}>
-              <span>Continue with Google</span>
+              <span>{t('auth.continueGoogle')}</span>
             </button>
           </form>
 
           <p className="auth-register-text">
-            Don&apos;t have account? <Link href="/register" className="auth-register-link">Register</Link>
+            {t('auth.noAccount')} <Link href="/register" className="auth-register-link">{t('auth.register')}</Link>
           </p>
         </div>
       </div>
@@ -159,8 +162,8 @@ export default function Auth() {
       {/* Right Side - Welcome Section */}
       <div className="auth-right">
         <div className="auth-welcome-content">
-          <h2 className="auth-welcome-title">Welcome Back!</h2>
-          <p className="auth-welcome-subtitle">Please log in to continue your journey.</p>
+          <h2 className="auth-welcome-title">{t('auth.welcomeBack')}</h2>
+          <p className="auth-welcome-subtitle">{t('auth.welcomeSub')}</p>
 
           {/* Placeholder for custom images/charts */}
           <div className="auth-visual-grid">

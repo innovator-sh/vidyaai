@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import { House, SquaresFour, ChartBar, User, CaretLeft, CaretRight } from 'phosphor-react';
+import { House, SquaresFour, User, CaretLeft, CaretRight } from 'phosphor-react';
+import { useTranslation } from 'react-i18next';
 
 export default function VerticalNav() {
+  const { t } = useTranslation();
   const router = useRouter();
   const currentPath = router.pathname;
   const [isExpanded, setIsExpanded] = useState(false);
 
   const navItems = [
-    { icon: House, path: '/', label: 'Home' },
-    { icon: SquaresFour, path: '/screens/chat', label: 'Chat' },
-    // { icon: ChartBar, path: '/screens/stats', label: 'Stats' },
-    { icon: User, path: '/screens/account', label: 'Account' },
+    { icon: House, path: '/', label: t('nav.home') },
+    { icon: SquaresFour, path: '/screens/chat', label: t('nav.chat') },
+    // { icon: ChartBar, path: '/screens/stats', label: t('nav.stats') },
+    { icon: User, path: '/screens/account', label: t('nav.account') },
   ];
 
   return (
@@ -20,7 +22,7 @@ export default function VerticalNav() {
       <button
         className="vertical-nav-toggle"
         onClick={() => setIsExpanded(!isExpanded)}
-        aria-label={isExpanded ? 'Collapse navigation' : 'Expand navigation'}
+        aria-label={isExpanded ? t('nav.collapse') : t('nav.expand')}
       >
         {isExpanded ? <CaretRight size={16} weight="regular" /> : <CaretLeft size={16} weight="regular" />}
       </button>

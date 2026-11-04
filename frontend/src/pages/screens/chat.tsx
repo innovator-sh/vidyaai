@@ -1,5 +1,6 @@
 ﻿import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
+import { useTranslation } from 'react-i18next';
 import { Plus, Database, Moon, ClockCounterClockwise, ChartPie, Waves, Paperclip, ArrowRight, FileText, Lightbulb, PencilSimple, Exam, CaretRight, CaretLeft, DotsThree, ChatCircleDots, Star, Microphone, X, Books, CaretDown, CaretUp, FlowArrow, FileDoc, DownloadSimple, Timer, ArrowClockwise, SquaresFour, Stack, User } from 'phosphor-react';
 import PillNav from '../../components/PillNav';
 import { Loader } from '../../components/retroui/Loader';
@@ -10,7 +11,11 @@ import ActionMenu from '../../components/ActionMenu';
 import { useAdaptivePersona } from '../../hooks/useAdaptivePersona';
 import { PersonaType } from '../../types/adaptive-persona';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
-import { api, ApiError, newMessageId, type QuizQuestion } from '../../lib/apiClient';
+import { api, newMessageId, type QuizQuestion } from '../../lib/apiClient';
+import { errorMessage } from '../../lib/errors';
+import { MAX_UPLOAD_BYTES, PollTimeoutError, pollDocument } from '../../lib/documents';
+import AttachmentChip, { type Attachment } from '../../components/AttachmentChip';
+import i18n, { currentLanguage, localeFor } from '../../i18n';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 
@@ -61,18 +66,19 @@ interface RecentChat {
   is_favorite: boolean;
 }
 
+/** Localised message for any failure (uses the global i18n instance so it can be used from callbacks). */
 function errorText(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.status === 429 && err.retryAfter) {
-      return `${err.message} (try again in ${err.retryAfter}s)`;
-    }
-    return err.message;
-  }
-  return 'Something went wrong. Please try again.';
+  return errorMessage(err, i18n.t);
+}
+
+function isPdfFile(file: File): boolean {
+  return file.type === 'application/pdf' || (!file.type && /\.pdf$/i.test(file.name));
 }
 
 function Chat() {
   const router = useRouter();
+  const { t, i18n: i18nInstance } = useTranslation();
+  const locale = localeFor(i18nInstance.resolvedLanguage || i18nInstance.language);
   const { user } = useAuth();
 
   // Knowledge Base document selected via ?docId=...&docName=...
@@ -86,7 +92,7 @@ function Chat() {
   useEffect(() => {
     if (router.isReady && router.query.docId) {
       setDocumentId(String(router.query.docId));
-      setKbDocName(router.query.docName ? String(router.query.docName) : 'Document');
+      setKbDocName(router.query.docName ? String(router.query.docName) : i18n.t('chat.document'));
     }
   }, [router.isReady, router.query.docId, router.query.docName]);
 
@@ -106,7 +112,8 @@ function Chat() {
   const [isTyping, setIsTyping] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
-  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [attachment, setAttachment] = useState<Attachment | null>(null);
+  const attachAbortRef = useRef<AbortController | null>(null);
   const [showKnowledgeBase, setShowKnowledgeBase] = useState(false);
   const [ocrProcessing, setOcrProcessing] = useState(false);
   const [recentChats, setRecentChats] = useState<RecentChat[]>([]);
@@ -119,7 +126,6 @@ function Chat() {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [collapsedMessages, setCollapsedMessages] = useState<Set<number>>(new Set());
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -210,9 +216,9 @@ function Chat() {
       recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
         if (event.error === 'not-allowed') {
-          alert('Microphone permission denied. Please enable microphone access.');
+          alert(i18n.t('chat.micDenied'));
         } else if (event.error === 'audio-capture') {
-          alert('No microphone detected. Please connect a microphone.');
+          alert(i18n.t('chat.micMissing'));
         }
         setIsRecording(false);
       };
@@ -232,10 +238,16 @@ function Chat() {
     };
   }, []);
 
-  // Abort any in-flight chat stream when leaving the page
+  // Keep speech recognition in the chosen language
+  useEffect(() => {
+    if (recognitionRef.current) recognitionRef.current.lang = locale;
+  }, [locale]);
+
+  // Abort any in-flight chat stream / attachment processing when leaving the page
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
+      attachAbortRef.current?.abort();
     };
   }, []);
 
@@ -246,6 +258,7 @@ function Chat() {
     } else {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
+      u.lang = locale;
       u.onend = () => setIsSpeaking(null);
       window.speechSynthesis.speak(u);
       setIsSpeaking(idx);
@@ -341,7 +354,7 @@ function Chat() {
       setIsRecording(true);
     } catch (err) {
       console.error('Microphone access denied:', err);
-      alert('Could not access microphone.');
+      alert(t('chat.micUnavailable'));
     }
   };
 
@@ -411,7 +424,7 @@ function Chat() {
   const refreshRecentChats = useCallback(async () => {
     try {
       const resp = await api.listConversations({ limit: 20 });
-      setRecentChats(resp.items.map((c) => ({ id: c.id, title: c.title || 'Chat Session', is_favorite: c.is_favorite })));
+      setRecentChats(resp.items.map((c) => ({ id: c.id, title: c.title, is_favorite: c.is_favorite })));
     } catch {
       /* sidebar is non-critical */
     }
@@ -445,6 +458,15 @@ function Chat() {
     e?.preventDefault();
     if (isTyping || ocrProcessing) return;
 
+    if (attachment && (attachment.status === 'uploading' || attachment.status === 'processing')) {
+      setChatError(t('chat.attachmentNotReady'));
+      return;
+    }
+    if (attachment?.status === 'failed') {
+      setChatError(t('chat.attachmentFailed'));
+      return;
+    }
+
     let textToSubmit = overrideInput !== undefined ? overrideInput : input;
 
     if (isRecording) {
@@ -454,31 +476,33 @@ function Chat() {
       }
     }
 
-    if (!textToSubmit.trim() && !attachedFile) return;
+    if (!textToSubmit.trim() && !attachment) return;
 
     const userInput = textToSubmit;
-    const imageFile = attachedFile;
-
-    if (imageFile && !imageFile.type.startsWith('image/')) {
-      setChatError('Only image attachments are supported in chat. Add PDFs from the Knowledge Base.');
-      return;
-    }
+    const imageFile = attachment?.kind === 'image' ? attachment.file : null;
+    const pdfDocumentId = attachment?.kind === 'pdf' ? attachment.documentId : null;
+    // A PDF attached in chat becomes the document context for this and the following turns.
+    const activeDocumentId = pdfDocumentId ?? documentId;
 
     // Build display content for the user's message
-    const displayContent = (imageFile && !imagePreviewUrl)
-      ? `${userInput}${userInput ? '\n' : ''}\u{1F4CE} ${imageFile.name}`
+    const displayContent = (attachment && !attachment.previewUrl)
+      ? `${userInput}${userInput ? '\n' : ''}\u{1F4CE} ${attachment.file.name}`
       : userInput;
 
     const newMessage: Message = { role: 'user', content: displayContent };
-    if (imagePreviewUrl) {
-      newMessage.imageUrl = imagePreviewUrl;
+    if (attachment?.previewUrl) {
+      newMessage.imageUrl = attachment.previewUrl;
+    }
+
+    if (pdfDocumentId && attachment) {
+      setDocumentId(pdfDocumentId);
+      setKbDocName(attachment.file.name);
     }
 
     setChatError(null);
     setMessages(prev => [...prev, newMessage]);
     setInput('');
-    setAttachedFile(null);
-    setImagePreviewUrl(null);
+    setAttachment(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setIsTyping(true);
 
@@ -506,8 +530,8 @@ function Chat() {
           const ocr = await api.ocr(imageFile, 'handwriting');
           const extracted = (ocr.text || '').trim();
           messageText = [
-            messageText || 'Please analyze and explain the contents of the attached image in detail.',
-            extracted ? `\n\nText extracted from the attached image:\n${extracted}` : '',
+            messageText || t('chat.defaultImagePrompt'),
+            extracted ? `\n\n${t('chat.extractedText')}\n${extracted}` : '',
           ].join('');
         } finally {
           setOcrProcessing(false);
@@ -520,7 +544,8 @@ function Chat() {
           message_id: messageId,
           message: messageText.slice(0, 8000),
           persona: currentPersona,
-          document_id: documentId,
+          document_id: activeDocumentId,
+          language: currentLanguage(),
         },
         controller.signal,
       )) {
@@ -567,28 +592,70 @@ function Chat() {
     setChatError(null);
     setMessages([]);
     setInput('');
-    setAttachedFile(null);
+    attachAbortRef.current?.abort();
+    setAttachment(null);
     // Reset the adaptive persona session
     resetSession();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setAttachedFile(file);
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onloadend = () => setImagePreviewUrl(reader.result as string);
-        reader.readAsDataURL(file);
-      } else {
-        setImagePreviewUrl(null);
+  // Images are OCR'd on send; PDFs are uploaded right away and polled until the server has indexed them.
+  const attachFile = async (file: File) => {
+    setChatError(null);
+    const isImage = file.type.startsWith('image/');
+    if (!isImage && !isPdfFile(file)) {
+      setChatError(t('chat.attachmentTypeUnsupported'));
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setChatError(t('chat.attachmentTooLarge', { name: file.name }));
+      return;
+    }
+
+    attachAbortRef.current?.abort();
+    const controller = new AbortController();
+    attachAbortRef.current = controller;
+    const patch = (changes: Partial<Attachment>) =>
+      setAttachment((prev) => (prev && prev.file === file ? { ...prev, ...changes } : prev));
+
+    if (isImage) {
+      setAttachment({ file, kind: 'image', status: 'ready', previewUrl: null, documentId: null });
+      const reader = new FileReader();
+      reader.onloadend = () => patch({ previewUrl: reader.result as string });
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    setAttachment({ file, kind: 'pdf', status: 'uploading', previewUrl: null, documentId: null });
+    try {
+      const doc = await api.uploadDocument(file);
+      if (controller.signal.aborted) return;
+      patch({ documentId: doc.id, status: doc.status === 'ready' ? 'ready' : doc.status === 'failed' ? 'failed' : 'processing' });
+      if (doc.status === 'failed') {
+        setChatError(t('chat.attachmentFailed'));
+        return;
       }
+      if (doc.status !== 'ready') {
+        const done = await pollDocument(api.getDocument, doc.id, { signal: controller.signal });
+        patch({ status: done.status === 'ready' ? 'ready' : 'failed' });
+        if (done.status !== 'ready') setChatError(t('chat.attachmentFailed'));
+      }
+    } catch (err) {
+      if ((err as { name?: string })?.name === 'AbortError' || controller.signal.aborted) return;
+      patch({ status: 'failed' });
+      setChatError(err instanceof PollTimeoutError ? t('chat.attachmentTimeout') : errorText(err));
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset so picking the same file again re-triggers onChange
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (file) void attachFile(file);
+  };
+
   const handleRemoveFile = () => {
-    setAttachedFile(null);
-    setImagePreviewUrl(null);
+    attachAbortRef.current?.abort();
+    setAttachment(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -632,7 +699,7 @@ function Chat() {
       setCurrentDiagram(data.mermaid);
       setShowDiagramModal(true);
     } catch (err) {
-      alert(`Failed to generate flowchart. ${errorText(err)}`);
+      alert(t('chat.flowchartFailed', { reason: errorText(err) }));
     }
   };
 
@@ -644,7 +711,7 @@ function Chat() {
       setCurrentReport(data.summary);
       setShowReportModal(true);
     } catch (err) {
-      alert(`Failed to generate report. ${errorText(err)}`);
+      alert(t('chat.reportFailed', { reason: errorText(err) }));
     } finally {
       setIsGeneratingReport(false);
     }
@@ -663,11 +730,11 @@ function Chat() {
         setQuizFinished(false);
         setShowQuizModal(true);
       } else {
-        alert('No quiz questions could be generated from this message.');
+        alert(t('chat.quizNoQuestions'));
       }
     } catch (error) {
       console.error('Quiz generation error:', error);
-      alert(`Failed to generate quiz. ${errorText(error)}`);
+      alert(t('chat.quizFailed', { reason: errorText(error) }));
     }
   };
 
@@ -729,7 +796,7 @@ function Chat() {
       {kbDocName && (
         <div className="kb-context-banner">
           <FileText size={16} weight="bold" />
-          <span className="desktop-only">Chatting with: <strong>{kbDocName}</strong></span>
+          <span className="desktop-only">{t('chat.chattingWith')} <strong>{kbDocName}</strong></span>
           <span className="mobile-only">
             <strong>
               {kbDocName.split(' ').length > 3
@@ -740,7 +807,8 @@ function Chat() {
           <button
             className="kb-context-clear"
             onClick={() => { setKbDocName(''); setDocumentId(null); router.replace('/screens/chat'); }}
-            title="Clear document context"
+            title={t('chat.clearDocument')}
+            aria-label={t('chat.clearDocument')}
           >
             <X size={14} weight="bold" />
           </button>
@@ -758,14 +826,14 @@ function Chat() {
         <button
           className="sidebar-collapse-toggle"
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+          title={sidebarCollapsed ? t('chat.expandSidebar') : t('chat.collapseSidebar')}
         >
           {sidebarCollapsed ? <CaretRight size={20} weight="bold" /> : <CaretLeft size={20} weight="bold" />}
         </button>
 
-        <button className="sidebar-btn" onClick={handleNewChat} title="New Chat">
+        <button className="sidebar-btn" onClick={handleNewChat} title={t('chat.newChat')}>
           <Plus size={24} weight="bold" />
-          {!sidebarCollapsed && <span className="sidebar-label">New Chat</span>}
+          {!sidebarCollapsed && <span className="sidebar-label">{t('chat.newChat')}</span>}
         </button>
 
         {!sidebarCollapsed && (
@@ -773,24 +841,24 @@ function Chat() {
 
 
             <div className="sidebar-section">
-              <h3 className="sidebar-section-title">RECENT CHATS</h3>
+              <h3 className="sidebar-section-title">{t('chat.recentChats')}</h3>
               <div className="sidebar-chat-list">
                 {recentChats.slice(0, 3).map((c) => (
                   <button key={c.id} className="sidebar-chat-item" onClick={() => openConversation(c.id)}>
                     <ChatCircleDots size={20} />
-                    <span>{c.title}</span>
+                    <span>{c.title || t('chat.untitled')}</span>
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="sidebar-section">
-              <h3 className="sidebar-section-title">FAVORITES</h3>
+              <h3 className="sidebar-section-title">{t('chat.favorites')}</h3>
               <div className="sidebar-chat-list">
                 {recentChats.filter((c) => c.is_favorite).slice(0, 5).map((c) => (
                   <button key={c.id} className="sidebar-chat-item favorite" onClick={() => openConversation(c.id)}>
                     <Star size={20} weight="fill" />
-                    <span>{c.title}</span>
+                    <span>{c.title || t('chat.untitled')}</span>
                   </button>
                 ))}
               </div>
@@ -799,23 +867,23 @@ function Chat() {
         )}
 
         <div className="sidebar-bottom">
-          <Link href="/screens/knowledge-base" className="sidebar-btn" title="Knowledge Base">
+          <Link href="/screens/knowledge-base" className="sidebar-btn" title={t('chat.knowledgeBase')}>
             <Books size={24} weight="bold" />
-            {!sidebarCollapsed && <span className="sidebar-label">Knowledge Base</span>}
+            {!sidebarCollapsed && <span className="sidebar-label">{t('chat.knowledgeBase')}</span>}
           </Link>
 
-          <button className="sidebar-btn" onClick={() => setNightMode(!nightMode)} title="Night Mode">
+          <button className="sidebar-btn" onClick={() => setNightMode(!nightMode)} title={t('chat.nightMode')}>
             <Moon size={24} weight={nightMode ? 'fill' : 'regular'} />
-            {!sidebarCollapsed && <span className="sidebar-label">Night Mode</span>}
+            {!sidebarCollapsed && <span className="sidebar-label">{t('chat.nightMode')}</span>}
           </button>
 
-          <Link href="/screens/history" className="sidebar-btn" title="History">
+          <Link href="/screens/history" className="sidebar-btn" title={t('chat.history')}>
             <ClockCounterClockwise size={24} />
-            {!sidebarCollapsed && <span className="sidebar-label">History</span>}
+            {!sidebarCollapsed && <span className="sidebar-label">{t('chat.history')}</span>}
           </Link>
-          <button className="sidebar-btn" title="Memories">
+          <button className="sidebar-btn" title={t('chat.memories')}>
             <Database size={24} />
-            {!sidebarCollapsed && <span className="sidebar-label">Memories</span>}
+            {!sidebarCollapsed && <span className="sidebar-label">{t('chat.memories')}</span>}
           </button>
         </div>
       </div>
@@ -825,8 +893,8 @@ function Chat() {
         <div className="diagram-modal-overlay" onClick={() => setShowDiagramModal(false)}>
           <div className="diagram-modal" onClick={e => e.stopPropagation()}>
             <div className="diagram-modal-header">
-              <h3 className="diagram-modal-title"><FlowArrow size={24} weight="bold" /> Flowchart Diagram</h3>
-              <button className="diagram-modal-close" onClick={() => setShowDiagramModal(false)} title="Close"><X size={24} weight="bold" /></button>
+              <h3 className="diagram-modal-title"><FlowArrow size={24} weight="bold" /> {t('chat.flowchartTitle')}</h3>
+              <button className="diagram-modal-close" onClick={() => setShowDiagramModal(false)} title={t('common.close')}><X size={24} weight="bold" /></button>
             </div>
             <div className="diagram-modal-content"><MermaidDiagram chart={currentDiagram} /></div>
           </div>
@@ -838,17 +906,17 @@ function Chat() {
         <div className="diagram-modal-overlay" onClick={() => setShowReportModal(false)}>
           <div className="diagram-modal" onClick={e => e.stopPropagation()}>
             <div className="diagram-modal-header">
-              <h3 className="diagram-modal-title"><FileDoc size={24} weight="bold" /> Summary Report</h3>
+              <h3 className="diagram-modal-title"><FileDoc size={24} weight="bold" /> {t('chat.reportTitle')}</h3>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   className="diagram-modal-close"
                   onClick={handleDownloadPdf}
-                  title="Download as PDF"
+                  title={t('chat.downloadPdf')}
                   style={{ color: '#5b7cff', fontWeight: 600, display: 'flex', gap: '6px', padding: '6px 12px', background: 'rgba(91, 124, 255, 0.1)', borderRadius: '8px' }}
                 >
-                  <DownloadSimple size={20} weight="bold" /> Download PDF
+                  <DownloadSimple size={20} weight="bold" /> {t('chat.downloadPdf')}
                 </button>
-                <button className="diagram-modal-close" onClick={() => setShowReportModal(false)} title="Close"><X size={24} weight="bold" /></button>
+                <button className="diagram-modal-close" onClick={() => setShowReportModal(false)} title={t('common.close')}><X size={24} weight="bold" /></button>
               </div>
             </div>
             <div className="diagram-modal-content" id="report-content-to-download" style={{ background: '#fff', padding: '24px' }}>
@@ -863,23 +931,23 @@ function Chat() {
         <div className="diagram-modal-overlay" onClick={() => setShowSessionAnalytics(false)}>
           <div className="diagram-modal" onClick={e => e.stopPropagation()}>
             <div className="diagram-modal-header">
-              <h3 className="diagram-modal-title"><ChartPie size={24} weight="bold" /> Session Analytics</h3>
+              <h3 className="diagram-modal-title"><ChartPie size={24} weight="bold" /> {t('chat.sessionAnalytics')}</h3>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   className="diagram-modal-close"
                   onClick={() => resetSession()}
-                  title="Reset Session"
+                  title={t('chat.resetSession')}
                   style={{ color: '#ef4444', fontWeight: 600, display: 'flex', gap: '6px', padding: '6px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px' }}
                 >
-                  <ArrowClockwise size={20} weight="bold" /> Reset Session
+                  <ArrowClockwise size={20} weight="bold" /> {t('chat.resetSession')}
                 </button>
-                <button className="diagram-modal-close" onClick={() => setShowSessionAnalytics(false)} title="Close"><X size={24} weight="bold" /></button>
+                <button className="diagram-modal-close" onClick={() => setShowSessionAnalytics(false)} title={t('common.close')}><X size={24} weight="bold" /></button>
               </div>
             </div>
             <div className="diagram-modal-content" style={{ background: '#fff', padding: '24px' }}>
               <div className="session-analytics-content">
                 <div style={{ marginBottom: '20px' }}>
-                  <h4 style={{ margin: '0 0 10px 0', color: '#1f2937' }}>Current Session</h4>
+                  <h4 style={{ margin: '0 0 10px 0', color: '#1f2937' }}>{t('chat.currentSession')}</h4>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
                     <span style={{ fontSize: '24px' }}>{personaDisplayInfo.icon}</span>
                     <div>
@@ -889,7 +957,7 @@ function Chat() {
                   </div>
                   <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '8px' }}>
                     <Timer size={16} style={{ marginRight: '4px' }} />
-                    Session Duration: {elapsedMinutes < 60 ? `${elapsedMinutes} minutes` : `${Math.floor(elapsedMinutes / 60)} hours ${elapsedMinutes % 60} minutes`}
+                    {t('chat.sessionDuration', { duration: elapsedMinutes < 60 ? t('chat.durationMinutes', { count: elapsedMinutes }) : t('chat.durationHoursMinutes', { hours: Math.floor(elapsedMinutes / 60), minutes: elapsedMinutes % 60 }) })}
                   </div>
                 </div>
                 <div className="analytics-summary">
@@ -906,14 +974,14 @@ function Chat() {
         <div className="diagram-modal-overlay" onClick={() => !quizFinished && handleCloseQuiz()}>
           <div className="quiz-modal" onClick={e => e.stopPropagation()}>
             <div className="quiz-modal-header">
-              <h3 className="quiz-modal-title"><Exam size={24} weight="bold" /> Quiz</h3>
-              <button className="quiz-modal-close" onClick={handleCloseQuiz} title="Close"><X size={24} weight="bold" /></button>
+              <h3 className="quiz-modal-title"><Exam size={24} weight="bold" /> {t('chat.quizTitle')}</h3>
+              <button className="quiz-modal-close" onClick={handleCloseQuiz} title={t('common.close')}><X size={24} weight="bold" /></button>
             </div>
             <div className="quiz-modal-content">
               {!quizFinished ? (
                 <>
                   <div className="quiz-question-number">
-                    Question {currentQuestionIndex + 1} of {quizData.questions.length}
+                    {t('chat.quizQuestion', { current: currentQuestionIndex + 1, total: quizData.questions.length })}
                   </div>
                   <div className="quiz-question-text">
                     {quizData.questions[currentQuestionIndex].question}
@@ -948,7 +1016,7 @@ function Chat() {
                   {showFeedback && selectedAnswers[currentQuestionIndex] !== null && (
                     <div className={`quiz-feedback ${selectedAnswers[currentQuestionIndex] === quizData.questions[currentQuestionIndex].answer_index ? 'correct' : 'incorrect'}`}>
                       <div className="quiz-feedback-title">
-                        {selectedAnswers[currentQuestionIndex] === quizData.questions[currentQuestionIndex].answer_index ? '✓ Correct!' : '✗ Incorrect'}
+                        {selectedAnswers[currentQuestionIndex] === quizData.questions[currentQuestionIndex].answer_index ? t('chat.quizCorrect') : t('chat.quizIncorrect')}
                       </div>
                       <div className="quiz-feedback-text">
                         {quizData.questions[currentQuestionIndex].explanation}
@@ -961,10 +1029,10 @@ function Chat() {
                       onClick={handlePrevQuestion}
                       disabled={currentQuestionIndex === 0}
                     >
-                      <CaretLeft size={20} weight="bold" /> Previous
+                      <CaretLeft size={20} weight="bold" /> {t('chat.quizPrevious')}
                     </button>
                     <div className="quiz-score">
-                      Score: {quizScore} / {quizData.questions.length}
+                      {t('chat.quizScore', { score: quizScore, total: quizData.questions.length })}
                     </div>
                     {currentQuestionIndex < quizData.questions.length - 1 ? (
                       <button
@@ -972,7 +1040,7 @@ function Chat() {
                         onClick={handleNextQuestion}
                         disabled={selectedAnswers[currentQuestionIndex] === null}
                       >
-                        Next <CaretRight size={20} weight="bold" />
+                        {t('chat.quizNext')} <CaretRight size={20} weight="bold" />
                       </button>
                     ) : (
                       <button
@@ -980,7 +1048,7 @@ function Chat() {
                         onClick={handleFinishQuiz}
                         disabled={selectedAnswers[currentQuestionIndex] === null}
                       >
-                        Finish Quiz
+                        {t('chat.quizFinish')}
                       </button>
                     )}
                   </div>
@@ -988,7 +1056,7 @@ function Chat() {
               ) : (
                 <div className="quiz-summary">
                   <div className="quiz-summary-icon">🎉</div>
-                  <h3 className="quiz-summary-title">Quiz Complete!</h3>
+                  <h3 className="quiz-summary-title">{t('chat.quizComplete')}</h3>
                   <div className="quiz-summary-score">
                     {quizScore} / {quizData.questions.length}
                   </div>
@@ -996,7 +1064,7 @@ function Chat() {
                     {Math.round((quizScore / quizData.questions.length) * 100)}%
                   </div>
                   <button className="quiz-close-btn" onClick={handleCloseQuiz}>
-                    Close
+                    {t('common.close')}
                   </button>
                 </div>
               )}
@@ -1007,7 +1075,8 @@ function Chat() {
 
       {/* Scroll-to-Bottom Button */}
       {showScrollButton && messages.length > 0 && (
-        <button className="scroll-to-bottom-btn" onClick={scrollToBottom} title="Scroll to bottom">
+        <button className="scroll-to-bottom-btn" onClick={scrollToBottom} title={t('chat.scrollToBottom')}
+          aria-label={t('chat.scrollToBottom')}>
           <CaretDown size={24} weight="bold" />
         </button>
       )}
@@ -1027,39 +1096,29 @@ function Chat() {
         {chatError && (
           <div role="alert" style={{ margin: '8px auto', padding: '10px 14px', maxWidth: 720, background: '#fee', border: '2px solid #c00', borderRadius: 8, color: '#c00', fontSize: 14, fontFamily: 'Sora, sans-serif', display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
             <span>{chatError}</span>
-            <button onClick={() => setChatError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c00' }} aria-label="Dismiss"><X size={14} weight="bold" /></button>
+            <button onClick={() => setChatError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c00' }} aria-label={t('common.dismiss')}><X size={14} weight="bold" /></button>
           </div>
         )}
         {messages.length === 0 ? (
           <div className="center-exact">
-            <h1 className="greeting-exact">Hello! Ready to study?</h1>
-            <p className="greeting-subtitle">Choose a quick action below or ask your own question.</p>
+            <h1 className="greeting-exact">{t('chat.hello')}</h1>
+            <p className="greeting-subtitle">{t('chat.subtitle')}</p>
 
             <div className="search-container">
               <div className="search-input-wrapper">
-                <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleFileChange} />
-                {attachedFile && (
-                  <div className={`file-indicator ${imagePreviewUrl ? 'has-image' : ''}`}>
-                    {imagePreviewUrl ? (
-                      <img src={imagePreviewUrl} alt="Preview" className="file-indicator-preview-img" />
-                    ) : (
-                      <Paperclip size={14} weight="bold" />
-                    )}
-                    <span className="file-name">{attachedFile.name}</span>
-                    <button className="file-remove-btn" onClick={handleRemoveFile} title="Remove file"><X size={14} weight="bold" /></button>
-                  </div>
-                )}
-                <button className="search-mic-btn desktop-only" onClick={handleToggleMic} title="Voice input"><Microphone size={20} weight="bold" /></button>
+                <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,application/pdf,.pdf" onChange={handleFileChange} />
+                {attachment && <AttachmentChip attachment={attachment} onRemove={handleRemoveFile} />}
+                <button className="search-mic-btn desktop-only" onClick={handleToggleMic} title={t('chat.voiceInput')}><Microphone size={20} weight="bold" /></button>
                 <textarea
                   className="search-textarea desktop-only"
-                  placeholder="Ask anything or upload a file..."
+                  placeholder={t('chat.placeholder')}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && input.trim()) { e.preventDefault(); handleSubmit(e); } }}
                   rows={1}
                 />
                 <div className="search-actions desktop-only">
-                  <button className="search-attach-btn" onClick={() => fileInputRef.current?.click()} title="Attach file"><Paperclip size={20} /></button>
+                  <button className="search-attach-btn" onClick={() => fileInputRef.current?.click()} title={t('chat.attachFile')}><Paperclip size={20} /></button>
                   <div className="adaptive-persona-display">
                     <div className="persona-indicator" style={{ color: personaDisplayInfo.color }}>
                       <span className="persona-icon">{personaDisplayInfo.icon}</span>
@@ -1070,7 +1129,7 @@ function Chat() {
                       <span>{elapsedMinutes < 60 ? `${elapsedMinutes}min` : `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}min`}</span>
                     </div>
                   </div>
-                  <button className="search-submit-btn" onClick={(e) => { if (input.trim() || isRecording) handleSubmit(); }} title="Send message"><ArrowRight size={20} weight="bold" /></button>
+                  <button className="search-submit-btn" onClick={() => { if (input.trim() || isRecording || attachment) handleSubmit(); }} title={t('chat.send')}><ArrowRight size={20} weight="bold" /></button>
                 </div>
 
                 <div className="mobile-bottom-row mobile-only" style={{ alignItems: 'center', width: '100%', gap: '8px' }}>
@@ -1082,9 +1141,9 @@ function Chat() {
                       <>
                         <div className="mobile-menu-overlay" onClick={() => setShowPlusMenu(false)} />
                         <div className="mobile-menu-popup left-popup">
-                          <button className="mobile-menu-item" onClick={() => { fileInputRef.current?.click(); setShowPlusMenu(false); }}><Paperclip size={20} /><span>Attach File</span></button>
+                          <button className="mobile-menu-item" onClick={() => { fileInputRef.current?.click(); setShowPlusMenu(false); }}><Paperclip size={20} /><span>{t('chat.attachFileMenu')}</span></button>
                           <div className="mobile-menu-divider" />
-                          <button className="mobile-menu-item" onClick={() => { handleToggleMic(); setShowPlusMenu(false); }}><Microphone size={20} /><span>Microphone</span></button>
+                          <button className="mobile-menu-item" onClick={() => { handleToggleMic(); setShowPlusMenu(false); }}><Microphone size={20} /><span>{t('chat.microphone')}</span></button>
                         </div>
                       </>
                     )}
@@ -1093,13 +1152,13 @@ function Chat() {
                   <div style={{ flex: 1 }}>
                     {isRecording ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', fontWeight: 600 }}>
-                        <Waves size={24} className="animate-pulse" /> Listening...
+                        <Waves size={24} className="animate-pulse" /> {t('chat.listening')}
                       </div>
                     ) : (
                       <input
                         type="text"
                         className="floating-input-field"
-                        placeholder="Ask me anything..."
+                        placeholder={t('chat.placeholderMobile')}
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyPress={(e) => { if (e.key === 'Enter' && input.trim()) { e.preventDefault(); handleSubmit(e); } }}
@@ -1117,8 +1176,8 @@ function Chat() {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {(input.trim() || attachedFile || isRecording || ocrProcessing) ? (
-                      <button className="mobile-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { handleSubmit(e); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
+                    {(input.trim() || attachment || isRecording || ocrProcessing) ? (
+                      <button className="mobile-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { handleSubmit(e); }} title={ocrProcessing ? t('chat.scanning') : t('chat.send')}>
                         {ocrProcessing ? '⏳' : <ArrowRight size={18} weight="bold" color="#fff" />}
                       </button>
                     ) : (
@@ -1130,7 +1189,7 @@ function Chat() {
                           <>
                             <div className="mobile-menu-overlay" onClick={() => setShowMobileMenu(false)} />
                             <div className="mobile-menu-popup right-popup">
-                              <div className="mobile-menu-label">Current Persona</div>
+                              <div className="mobile-menu-label">{t('chat.currentPersona')}</div>
                               <div className="mobile-menu-item active">
                                 <span className="persona-icon">{personaDisplayInfo.icon}</span>
                                 <span>{personaDisplayInfo.name}</span>
@@ -1139,11 +1198,11 @@ function Chat() {
                               <div className="mobile-menu-divider" />
                               <button className="mobile-menu-item" onClick={() => { resetSession(); setShowMobileMenu(false); }}>
                                 <ArrowClockwise size={20} />
-                                <span>Reset Session</span>
+                                <span>{t('chat.resetSession')}</span>
                               </button>
                               <button className="mobile-menu-item" onClick={() => { setShowSessionAnalytics(true); setShowMobileMenu(false); }}>
                                 <ChartPie size={20} />
-                                <span>Study Mode</span>
+                                <span>{t('chat.studyMode')}</span>
                               </button>
                             </div>
                           </>
@@ -1156,21 +1215,21 @@ function Chat() {
             </div>
 
             <div className="quick-start-section">
-              <h3 className="quick-start-title">QUICK START</h3>
+              <h3 className="quick-start-title">{t('chat.quickStart')}</h3>
               <div className="quick-start-grid">
-                <button className="quick-card"><div className="quick-card-icon blue"><FileText size={24} weight="bold" /></div><div className="quick-card-content"><h4 className="quick-card-title">Summarize my notes</h4><p className="quick-card-desc">Turn long lectures into concise bullet points.</p></div></button>
-                <button className="quick-card"><div className="quick-card-icon orange"><Lightbulb size={24} weight="bold" /></div><div className="quick-card-content"><h4 className="quick-card-title">Explain a concept</h4><p className="quick-card-desc">Break down complex topics into simple terms.</p></div></button>
-                <button className="quick-card"><div className="quick-card-icon green"><PencilSimple size={24} weight="bold" /></div><div className="quick-card-content"><h4 className="quick-card-title">Help with homework</h4><p className="quick-card-desc">Step-by-step guidance for difficult problems.</p></div></button>
-                <button className="quick-card"><div className="quick-card-icon purple"><Exam size={24} weight="bold" /></div><div className="quick-card-content"><h4 className="quick-card-title">Prepare for a quiz</h4><p className="quick-card-desc">Generate practice questions and flashcards.</p></div></button>
+                <button className="quick-card"><div className="quick-card-icon blue"><FileText size={24} weight="bold" /></div><div className="quick-card-content"><h4 className="quick-card-title">{t('chat.quick.summarizeTitle')}</h4><p className="quick-card-desc">{t('chat.quick.summarizeDesc')}</p></div></button>
+                <button className="quick-card"><div className="quick-card-icon orange"><Lightbulb size={24} weight="bold" /></div><div className="quick-card-content"><h4 className="quick-card-title">{t('chat.quick.explainTitle')}</h4><p className="quick-card-desc">{t('chat.quick.explainDesc')}</p></div></button>
+                <button className="quick-card"><div className="quick-card-icon green"><PencilSimple size={24} weight="bold" /></div><div className="quick-card-content"><h4 className="quick-card-title">{t('chat.quick.homeworkTitle')}</h4><p className="quick-card-desc">{t('chat.quick.homeworkDesc')}</p></div></button>
+                <button className="quick-card"><div className="quick-card-icon purple"><Exam size={24} weight="bold" /></div><div className="quick-card-content"><h4 className="quick-card-title">{t('chat.quick.quizTitle')}</h4><p className="quick-card-desc">{t('chat.quick.quizDesc')}</p></div></button>
               </div>
             </div>
 
             <div className="popular-topics">
-              <span className="popular-label">Popular:</span>
-              <button className="topic-chip">Quantum Physics</button>
-              <button className="topic-chip">World War II</button>
-              <button className="topic-chip">Python Basics</button>
-              <button className="topic-chip">Macroeconomics</button>
+              <span className="popular-label">{t('chat.popular')}</span>
+              <button className="topic-chip">{t('chat.topics.quantum')}</button>
+              <button className="topic-chip">{t('chat.topics.ww2')}</button>
+              <button className="topic-chip">{t('chat.topics.python')}</button>
+              <button className="topic-chip">{t('chat.topics.macro')}</button>
             </div>
           </div>
         ) : (
@@ -1181,7 +1240,7 @@ function Chat() {
                   <div className="msg-avatar-exact">{msg.role === 'ai' ? 'V' : 'Y'}</div>
                   {msg.role === 'ai' && (
                     <div className="message-actions-left">
-                      <button className="action-menu-btn" onClick={() => setShowActionMenu(showActionMenu === idx ? null : idx)} title="More actions">
+                      <button className="action-menu-btn" onClick={() => setShowActionMenu(showActionMenu === idx ? null : idx)} title={t('chat.moreActions')}>
                         <DotsThree size={24} weight="bold" color="#1a1a1a" />
                       </button>
                       <ActionMenu
@@ -1201,18 +1260,18 @@ function Chat() {
                 </div>
                 <div className="msg-content-wrapper">
                   {msg.role === 'ai' && msg.content.length > 300 && (
-                    <button className="message-collapse-btn" onClick={() => toggleMessageCollapse(idx)} title={collapsedMessages.has(idx) ? 'Expand' : 'Collapse'}>
+                    <button className="message-collapse-btn" onClick={() => toggleMessageCollapse(idx)} title={collapsedMessages.has(idx) ? t('chat.expand') : t('chat.collapse')}>
                       {collapsedMessages.has(idx) ? <CaretDown size={14} weight="bold" /> : <CaretUp size={14} weight="bold" />}
                     </button>
                   )}
                   {msg.role === 'user' && msg.imageUrl && (
-                    <div className="message-image"><img src={msg.imageUrl} alt="Uploaded" className="message-image-preview" /></div>
+                    <div className="message-image"><img src={msg.imageUrl} alt={t('chat.uploadedImage')} className="message-image-preview" /></div>
                   )}
                   <div className={`msg-text-exact ${collapsedMessages.has(idx) ? 'collapsed' : ''}`}>
                     <MarkdownMessage content={msg.content} isUser={msg.role === 'user'} />
                     {msg.hasDiagram && msg.diagramCode && (
-                      <button className="diagram-badge" onClick={() => { setCurrentDiagram(msg.diagramCode!); setShowDiagramModal(true); }} title="View flowchart">
-                        <FlowArrow size={16} weight="bold" /><span>View Diagram</span>
+                      <button className="diagram-badge" onClick={() => { setCurrentDiagram(msg.diagramCode!); setShowDiagramModal(true); }} title={t('chat.viewFlowchart')}>
+                        <FlowArrow size={16} weight="bold" /><span>{t('chat.viewDiagram')}</span>
                       </button>
                     )}
                   </div>
@@ -1235,31 +1294,21 @@ function Chat() {
         {messages.length > 0 && (
           <div className="floating-input-area">
             <div className="floating-input-wrapper">
-              <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleFileChange} />
-              {attachedFile && (
-                <div className={`file-indicator ${imagePreviewUrl ? 'has-image' : ''}`}>
-                  {imagePreviewUrl ? (
-                    <img src={imagePreviewUrl} alt="Preview" className="file-indicator-preview-img" />
-                  ) : (
-                    <Paperclip size={14} weight="bold" />
-                  )}
-                  <span className="file-name">{attachedFile.name}</span>
-                  <button className="file-remove-btn" onClick={handleRemoveFile} title="Remove file"><X size={14} weight="bold" /></button>
-                </div>
-              )}
-              <button className={`floating-mic-btn desktop-only ${isRecording ? 'recording' : ''}`} onClick={handleToggleMic} title={isRecording ? 'Stop recording' : 'Voice input'}>
+              <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,application/pdf,.pdf" onChange={handleFileChange} />
+              {attachment && <AttachmentChip attachment={attachment} onRemove={handleRemoveFile} />}
+              <button className={`floating-mic-btn desktop-only ${isRecording ? 'recording' : ''}`} onClick={handleToggleMic} title={isRecording ? t('chat.stopRecording') : t('chat.voiceInput')}>
                 <Microphone size={20} weight={isRecording ? "fill" : "bold"} color={isRecording ? "#ef4444" : "currentColor"} className={isRecording ? "animate-pulse" : ""} />
               </button>
               <textarea
                 className="floating-textarea desktop-only"
-                placeholder="Ask anything..."
+                placeholder={t('chat.placeholderShort')}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && input.trim()) { e.preventDefault(); handleSubmit(e); } }}
                 rows={1}
               />
               <div className="floating-actions desktop-only">
-                <button className="floating-attach-btn" onClick={() => fileInputRef.current?.click()} title="Attach file"><Paperclip size={20} /></button>
+                <button className="floating-attach-btn" onClick={() => fileInputRef.current?.click()} title={t('chat.attachFile')}><Paperclip size={20} /></button>
                 <div className="floating-adaptive-persona">
                   <div className="persona-indicator" style={{ color: personaDisplayInfo.color }}>
                     <span className="persona-icon">{personaDisplayInfo.icon}</span>
@@ -1270,7 +1319,7 @@ function Chat() {
                     <span>{elapsedMinutes < 60 ? `${elapsedMinutes}min` : `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}min`}</span>
                   </div>
                 </div>
-                <button className="floating-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { if (input.trim() || attachedFile) handleSubmit(e); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
+                <button className="floating-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { if (input.trim() || attachment) handleSubmit(e); }} title={ocrProcessing ? t('chat.scanning') : t('chat.send')}>
                   {ocrProcessing ? '⏳' : <ArrowRight size={20} weight="bold" />}
                 </button>
               </div>
@@ -1284,9 +1333,9 @@ function Chat() {
                     <>
                       <div className="mobile-menu-overlay" onClick={() => setShowPlusMenu(false)} />
                       <div className="mobile-menu-popup left-popup">
-                        <button className="mobile-menu-item" onClick={() => { fileInputRef.current?.click(); setShowPlusMenu(false); }}><Paperclip size={20} /><span>Attach File</span></button>
+                        <button className="mobile-menu-item" onClick={() => { fileInputRef.current?.click(); setShowPlusMenu(false); }}><Paperclip size={20} /><span>{t('chat.attachFileMenu')}</span></button>
                         <div className="mobile-menu-divider" />
-                        <button className="mobile-menu-item" onClick={() => { handleToggleMic(); setShowPlusMenu(false); }}><Microphone size={20} /><span>Microphone</span></button>
+                        <button className="mobile-menu-item" onClick={() => { handleToggleMic(); setShowPlusMenu(false); }}><Microphone size={20} /><span>{t('chat.microphone')}</span></button>
                       </div>
                     </>
                   )}
@@ -1295,13 +1344,13 @@ function Chat() {
                 <div style={{ flex: 1 }}>
                   {isRecording ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', fontWeight: 600 }}>
-                      <Waves size={24} className="animate-pulse" /> Listening...
+                      <Waves size={24} className="animate-pulse" /> {t('chat.listening')}
                     </div>
                   ) : (
                     <input
                       type="text"
                       className="floating-input-field"
-                      placeholder="Ask me anything..."
+                      placeholder={t('chat.placeholderMobile')}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyPress={(e) => { if (e.key === 'Enter' && input.trim()) { e.preventDefault(); handleSubmit(e); } }}
@@ -1319,8 +1368,8 @@ function Chat() {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {(input.trim() || attachedFile || isRecording || ocrProcessing) ? (
-                    <button className="mobile-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { handleSubmit(e); }} title={ocrProcessing ? 'Scanning image...' : 'Send message'}>
+                  {(input.trim() || attachment || isRecording || ocrProcessing) ? (
+                    <button className="mobile-submit-btn" disabled={isTyping || ocrProcessing} onClick={(e) => { handleSubmit(e); }} title={ocrProcessing ? t('chat.scanning') : t('chat.send')}>
                       {ocrProcessing ? '⏳' : <ArrowRight size={18} weight="bold" color="#fff" />}
                     </button>
                   ) : (
@@ -1332,7 +1381,7 @@ function Chat() {
                         <>
                           <div className="mobile-menu-overlay" onClick={() => setShowMobileMenu(false)} />
                           <div className="mobile-menu-popup right-popup">
-                            <div className="mobile-menu-label">Current Persona</div>
+                            <div className="mobile-menu-label">{t('chat.currentPersona')}</div>
                             <div className="mobile-menu-item active">
                               <span className="persona-icon">{personaDisplayInfo.icon}</span>
                               <span>{personaDisplayInfo.name}</span>
@@ -1341,11 +1390,11 @@ function Chat() {
                             <div className="mobile-menu-divider" />
                             <button className="mobile-menu-item" onClick={() => { resetSession(); setShowMobileMenu(false); }}>
                               <ArrowClockwise size={20} />
-                              <span>Reset Session</span>
+                              <span>{t('chat.resetSession')}</span>
                             </button>
                             <button className="mobile-menu-item" onClick={() => { setShowSessionAnalytics(true); setShowMobileMenu(false); }}>
                               <ChartPie size={20} />
-                              <span>Study Mode</span>
+                              <span>{t('chat.studyMode')}</span>
                             </button>
                           </div>
                         </>

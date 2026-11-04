@@ -1,29 +1,34 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChartBar, ChatCircle, CheckCircle, Fire } from 'phosphor-react';
+import { useTranslation } from 'react-i18next';
+import { ChartBar, ChatCircle, CheckCircle, Fire, Timer } from 'phosphor-react';
 import { BarChart } from '../../components/retroui/charts/BarChart';
 import { PieChart } from '../../components/retroui/charts/PieChart';
 import { LineChart } from '../../components/retroui/charts/LineChart';
 import PillNav from '../../components/PillNav';
 import { Select } from '../../components/retroui/Select';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
-import { api, ApiError, type Stats as StatsResponse, type QuizResultRecord } from '../../lib/apiClient';
+import { api, type Stats as StatsResponse } from '../../lib/apiClient';
+import { errorMessage } from '../../lib/errors';
+import { ALL_SUBJECTS, buildStatsView, formatMinutes, subjectLabel } from '../../lib/stats-view';
+import i18n, { localeFor } from '../../i18n';
 
-const ALL = '__all__';
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const PIE_COLORS = ['#ffe44d', '#4dd4e8', '#ff6b4d', '#b19eef', '#ff4d8f', '#a8e6cf'];
 
-function pct(score: number, total: number): number {
-  return total > 0 ? Math.round((score / total) * 100) : 0;
-}
-
-function subjectOf(r: QuizResultRecord): string {
-  return r.subject?.trim() || 'General';
+function ChartEmpty({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="chart-empty" role="status">
+      {children}
+    </p>
+  );
 }
 
 function Stats() {
+  const { t, i18n: i18nInstance } = useTranslation();
+  const locale = localeFor(i18nInstance.resolvedLanguage || i18nInstance.language);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedSubject, setSelectedSubject] = useState(ALL);
+  const [selectedSubject, setSelectedSubject] = useState(ALL_SUBJECTS);
   const [renderedAt] = useState(() => Date.now());
 
   useEffect(() => {
@@ -34,7 +39,7 @@ function Stats() {
         if (!cancelled) setStats(s);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load your stats.');
+        if (!cancelled) setError(errorMessage(err, i18n.t, 'stats.loadFailed'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -44,55 +49,12 @@ function Stats() {
     };
   }, []);
 
-  const allResults = useMemo(() => stats?.quiz_results ?? [], [stats]);
-  const subjects = useMemo(() => Array.from(new Set(allResults.map(subjectOf))).sort(), [allResults]);
-  const results = useMemo(
-    () => (selectedSubject === ALL ? allResults : allResults.filter((r) => subjectOf(r) === selectedSubject)),
-    [allResults, selectedSubject],
+  const view = useMemo(
+    () => buildStatsView(stats, { subject: selectedSubject, now: renderedAt, locale, t }),
+    [stats, selectedSubject, renderedAt, locale, t],
   );
 
-  // Average score per subject (percent)
-  const topicPerformance = useMemo(() => {
-    const bySubject = new Map<string, { score: number; total: number }>();
-    for (const r of allResults) {
-      const key = subjectOf(r);
-      const cur = bySubject.get(key) ?? { score: 0, total: 0 };
-      cur.score += r.score;
-      cur.total += r.total;
-      bySubject.set(key, cur);
-    }
-    return Array.from(bySubject, ([topic, v]) => ({ topic, score: pct(v.score, v.total), total: 100 }));
-  }, [allResults]);
-
-  // Number of quizzes per subject
-  const quizzesBySubject = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const r of allResults) counts.set(subjectOf(r), (counts.get(subjectOf(r)) ?? 0) + 1);
-    return Array.from(counts, ([name, value]) => ({ name, value }));
-  }, [allResults]);
-
-  // Last 6 weeks: questions answered and accuracy
-  const weeklyProgress = useMemo(() => {
-    const now = renderedAt;
-    return Array.from({ length: 6 }, (_, i) => {
-      const weeksAgo = 5 - i;
-      const end = now - weeksAgo * WEEK_MS;
-      const start = end - WEEK_MS;
-      const inWeek = results.filter((r) => {
-        const t = r.created_at ? new Date(r.created_at).getTime() : NaN;
-        return t > start && t <= end;
-      });
-      const score = inWeek.reduce((a, r) => a + r.score, 0);
-      const total = inWeek.reduce((a, r) => a + r.total, 0);
-      return { week: weeksAgo === 0 ? 'This week' : `${weeksAgo}w ago`, problems: total, accuracy: pct(score, total) };
-    });
-  }, [results, renderedAt]);
-
-  const totalQuestions = results.reduce((a, r) => a + r.total, 0);
-  const averageScore = results.length
-    ? Math.round(results.reduce((a, r) => a + pct(r.score, r.total), 0) / results.length)
-    : 0;
-  const hasQuizData = allResults.length > 0;
+  const showGrid = !loading && !error && !view.isEmpty;
 
   return (
     <div className="stats-container">
@@ -100,8 +62,8 @@ function Stats() {
 
       <div className="stats-content">
         <div className="stats-header">
-          <h1 className="stats-title">Your Stats</h1>
-          <p className="stats-subtitle">Your Learning Progress Dashboard</p>
+          <h1 className="stats-title">{t('stats.title')}</h1>
+          <p className="stats-subtitle">{t('stats.dashboard')}</p>
 
           <div className="subject-selector">
             <Select value={selectedSubject} onValueChange={setSelectedSubject}>
@@ -109,12 +71,12 @@ function Stats() {
                 <Select.Value />
               </Select.Trigger>
               <Select.Content className="subject-select-content">
-                <Select.Item value={ALL} className="subject-select-item">
-                  <span>All Subjects</span>
+                <Select.Item value={ALL_SUBJECTS} className="subject-select-item">
+                  <span>{t('subjects.all')}</span>
                 </Select.Item>
-                {subjects.map((subject) => (
+                {view.subjects.map((subject) => (
                   <Select.Item key={subject} value={subject} className="subject-select-item">
-                    <span>{subject}</span>
+                    <span>{subjectLabel(t, subject)}</span>
                   </Select.Item>
                 ))}
               </Select.Content>
@@ -125,54 +87,127 @@ function Stats() {
         {error && (
           <p role="alert" style={{ color: '#c00', fontFamily: 'Sora, sans-serif', marginBottom: 16 }}>{error}</p>
         )}
-        {loading && <p style={{ fontFamily: 'Sora, sans-serif' }}>Loading your stats...</p>}
-        {!loading && !error && !hasQuizData && (
-          <p style={{ fontFamily: 'Sora, sans-serif', marginBottom: 16 }}>
-            No quiz results yet. Generate a quiz from any chat answer and your progress will show up here.
-          </p>
+        {loading && <p style={{ fontFamily: 'Sora, sans-serif' }}>{t('stats.loading')}</p>}
+        {!loading && !error && view.isEmpty && (
+          <p style={{ fontFamily: 'Sora, sans-serif', marginBottom: 16 }}>{t('stats.emptyAll')}</p>
         )}
 
-        {hasQuizData && (
+        {showGrid && (
           <div className="stats-grid">
             <div className="chart-card">
               <div className="chart-header">
-                <h2 className="chart-title">Subject-wise Performance</h2>
-                <p className="chart-description">Your average quiz score per subject</p>
+                <h2 className="chart-title">{t('stats.topicPerf')}</h2>
+                <p className="chart-description">{t('stats.topicDesc')}</p>
               </div>
-              <BarChart
-                data={topicPerformance}
-                index="topic"
-                categories={['score']}
-                fillColors={['#ffe44d']}
-                showGrid={true}
-              />
+              {view.hasQuizData ? (
+                <BarChart
+                  data={view.topicPerformance}
+                  index="topic"
+                  categories={['score']}
+                  indexLabel={t('stats.topicPerf')}
+                  categoryLabels={{ score: t('stats.avgScore') }}
+                  valueFormatter={(v) => `${v}%`}
+                  fillColors={['#ffe44d']}
+                  showGrid={true}
+                />
+              ) : (
+                <ChartEmpty>{t('stats.noQuizzes')}</ChartEmpty>
+              )}
             </div>
 
             <div className="chart-card">
               <div className="chart-header">
-                <h2 className="chart-title">Quizzes by Subject</h2>
-                <p className="chart-description">How many quizzes you took in each subject</p>
+                <h2 className="chart-title">{t('stats.studyTime')}</h2>
+                <p className="chart-description">{t('stats.studyDesc')}</p>
               </div>
-              <PieChart
-                data={quizzesBySubject}
-                dataKey="value"
-                nameKey="name"
-                colors={['#ffe44d', '#4dd4e8', '#ff6b4d', '#b19eef', '#ff4d8f', '#a8e6cf']}
-              />
+              {view.hasStudyTime ? (
+                <PieChart
+                  data={view.studyTime}
+                  dataKey="value"
+                  nameKey="name"
+                  valueFormatter={(v) => formatMinutes(t, v)}
+                  colors={PIE_COLORS}
+                />
+              ) : (
+                <ChartEmpty>{t('stats.studyEmpty')}</ChartEmpty>
+              )}
             </div>
 
             <div className="chart-card chart-card-wide">
               <div className="chart-header">
-                <h2 className="chart-title">Weekly Progress Tracker</h2>
-                <p className="chart-description">Questions answered and accuracy over time</p>
+                <h2 className="chart-title">{t('stats.weeklyActivity')}</h2>
+                <p className="chart-description">{t('stats.weeklyActivityDesc')}</p>
               </div>
-              <LineChart
-                data={weeklyProgress}
-                index="week"
-                categories={['problems', 'accuracy']}
-                strokeColors={['#4dd4e8', '#ff6b4d']}
-                showGrid={true}
-              />
+              {view.hasWeeklyActivity ? (
+                <BarChart
+                  data={view.weeklyActivity}
+                  index="day"
+                  categories={['messages']}
+                  indexLabel={t('stats.weeklyActivity')}
+                  categoryLabels={{ messages: t('stats.messages') }}
+                  fillColors={['#4dd4e8']}
+                  showGrid={true}
+                />
+              ) : (
+                <ChartEmpty>{t('stats.weeklyActivityEmpty')}</ChartEmpty>
+              )}
+            </div>
+
+            <div className="chart-card">
+              <div className="chart-header">
+                <h2 className="chart-title">{t('stats.chatsBySubject')}</h2>
+                <p className="chart-description">{t('stats.chatsBySubjectDesc')}</p>
+              </div>
+              {view.hasChatsBySubject ? (
+                <BarChart
+                  data={view.chatsBySubject}
+                  index="name"
+                  categories={['value']}
+                  indexLabel={t('stats.chatsBySubject')}
+                  categoryLabels={{ value: t('stats.chats') }}
+                  fillColors={['#b19eef']}
+                  showGrid={true}
+                />
+              ) : (
+                <ChartEmpty>{t('stats.chatsBySubjectEmpty')}</ChartEmpty>
+              )}
+            </div>
+
+            <div className="chart-card">
+              <div className="chart-header">
+                <h2 className="chart-title">{t('stats.quizzesBySubject')}</h2>
+                <p className="chart-description">{t('stats.quizzesBySubjectDesc')}</p>
+              </div>
+              {view.hasQuizData ? (
+                <PieChart
+                  data={view.quizzesBySubject}
+                  dataKey="value"
+                  nameKey="name"
+                  colors={PIE_COLORS}
+                />
+              ) : (
+                <ChartEmpty>{t('stats.noQuizzes')}</ChartEmpty>
+              )}
+            </div>
+
+            <div className="chart-card chart-card-wide">
+              <div className="chart-header">
+                <h2 className="chart-title">{t('stats.weeklyProg')}</h2>
+                <p className="chart-description">{t('stats.weeklyDesc')}</p>
+              </div>
+              {view.hasQuizData ? (
+                <LineChart
+                  data={view.weeklyProgress}
+                  index="week"
+                  categories={['problems', 'accuracy']}
+                  indexLabel={t('stats.weeklyProg')}
+                  categoryLabels={{ problems: t('stats.questions'), accuracy: t('stats.accuracyShort') }}
+                  strokeColors={['#4dd4e8', '#ff6b4d']}
+                  showGrid={true}
+                />
+              ) : (
+                <ChartEmpty>{t('stats.noQuizzes')}</ChartEmpty>
+              )}
             </div>
           </div>
         )}
@@ -183,8 +218,8 @@ function Stats() {
               <ChartBar size={32} weight="bold" />
             </div>
             <div className="summary-content">
-              <h3 className="summary-value">{averageScore}%</h3>
-              <p className="summary-label">Average Score</p>
+              <h3 className="summary-value">{view.quizAccuracy === null ? '—' : `${view.quizAccuracy}%`}</h3>
+              <p className="summary-label">{t('stats.quizAccuracy')}</p>
             </div>
           </div>
 
@@ -193,8 +228,8 @@ function Stats() {
               <ChatCircle size={32} weight="bold" />
             </div>
             <div className="summary-content">
-              <h3 className="summary-value">{stats?.chat_count ?? 0}</h3>
-              <p className="summary-label">Chats</p>
+              <h3 className="summary-value">{view.chatCount}</h3>
+              <p className="summary-label">{t('stats.chats')}</p>
             </div>
           </div>
 
@@ -203,8 +238,18 @@ function Stats() {
               <CheckCircle size={32} weight="bold" />
             </div>
             <div className="summary-content">
-              <h3 className="summary-value">{totalQuestions}</h3>
-              <p className="summary-label">Questions Answered</p>
+              <h3 className="summary-value">{view.totalQuestions}</h3>
+              <p className="summary-label">{t('stats.questionsAnswered')}</p>
+            </div>
+          </div>
+
+          <div className="summary-card">
+            <div className="summary-icon">
+              <Timer size={32} weight="bold" />
+            </div>
+            <div className="summary-content">
+              <h3 className="summary-value">{view.hasStudyTime ? formatMinutes(t, view.totalStudyMinutes) : '—'}</h3>
+              <p className="summary-label">{t('stats.totalStudy')}</p>
             </div>
           </div>
 
@@ -213,8 +258,8 @@ function Stats() {
               <Fire size={32} weight="bold" />
             </div>
             <div className="summary-content">
-              <h3 className="summary-value">{stats?.streak_days ?? 0}</h3>
-              <p className="summary-label">Day Streak</p>
+              <h3 className="summary-value">{view.streakDays}</h3>
+              <p className="summary-label">{t('stats.streak')}</p>
             </div>
           </div>
         </div>

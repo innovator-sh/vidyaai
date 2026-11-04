@@ -535,3 +535,19 @@
     font-size: 11px;
   }
 }
+
+/* Empty state shown inside a chart card when its data set has no points yet */
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  font-family: 'Sora', sans-serif;
+  font-size: 14px;
+  color: #666;
+  border: 2px dashed #bbb;
+  border-radius: 12px;
+}
