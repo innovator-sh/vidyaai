@@ -47,6 +47,8 @@ services:
       SARVAM_API_KEY: ${SARVAM_API_KEY:-}
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
+      SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
       - "127.0.0.1:8000:8080"
     depends_on:
